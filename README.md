@@ -110,7 +110,7 @@ python .\train_full_pyadm1_qmix.py --episodes 2 --episode-days 1 --run-name qmix
 PPO-style online smoke run:
 
 ```powershell
-python .\train_full_pyadm1_ppo.py --episodes 2 --episode-days 1 --run-name ppo_smoke
+python .\train_full_pyadm1_ppo.py --episodes 20 --episode-days 1 --run-name ppo_smoke --rollout-episodes-per-update 10 --entropy-coef-start 0.01 --entropy-coef-end 0.001
 ```
 
 Discrete IQL/IDQL-style offline smoke run:
@@ -124,6 +124,10 @@ Notes:
 - `train_full_pyadm1_qmix.py` keeps `n_agents=1` so that the control mechanism
   is identical to the DQN setpoint controller. The mixer remains in the code so
   the implementation can later be extended to multiple coordinated decisions.
+- `train_full_pyadm1_ppo.py` updates after a configurable batch of
+  episodes and stores both deterministic and stochastic rollout CSV/PNG
+  outputs for diagnosing whether the stochastic policy differs from the
+  argmax policy.
 - `train_full_pyadm1_iql.py` implements a discrete-action IQL variant in PyTorch.
   The supplied SBR reference uses JAXRL5/DDPM-IQL for offline RL, but PyADM1
   currently uses a discrete setpoint action, so a discrete IQL implementation is

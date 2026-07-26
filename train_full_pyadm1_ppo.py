@@ -25,6 +25,18 @@ from ad_rl.rl_utils import (
 from train_full_pyadm1_temp_penalty_consumption import config_for_run
 
 
+def entropy_coef_at_episode(
+    episode: int,
+    entropy_coef_start: float,
+    entropy_coef_end: float,
+    entropy_decay_episodes: int,
+) -> float:
+    if entropy_decay_episodes <= 0:
+        return float(entropy_coef_end)
+    frac = min(1.0, max(0.0, episode / float(entropy_decay_episodes)))
+    return float(entropy_coef_start + frac * (entropy_coef_end - entropy_coef_start))
+
+
 def train(
     episodes: int,
     episode_days: float,
@@ -40,8 +52,11 @@ def train(
     minibatch_size: int,
     gae_lambda: float,
     clip_coef: float,
-    entropy_coef: float,
+    entropy_coef_start: float,
+    entropy_coef_end: float,
+    entropy_decay_episodes: int,
     value_coef: float,
+    rollout_episodes_per_update: int,
 ):
     config = config_for_run(
         episode_days=episode_days,
@@ -70,7 +85,7 @@ def train(
         gamma=config.gamma,
         gae_lambda=gae_lambda,
         clip_coef=clip_coef,
-        entropy_coef=entropy_coef,
+        entropy_coef=entropy_coef_start,
         value_coef=value_coef,
         update_epochs=update_epochs,
         minibatch_size=minibatch_size,
@@ -83,20 +98,26 @@ def train(
         meta["ppo_minibatch_size"] = int(minibatch_size)
         meta["ppo_gae_lambda"] = float(gae_lambda)
         meta["ppo_clip_coef"] = float(clip_coef)
-        meta["ppo_entropy_coef"] = float(entropy_coef)
+        meta["ppo_entropy_coef_start"] = float(entropy_coef_start)
+        meta["ppo_entropy_coef_end"] = float(entropy_coef_end)
+        meta["ppo_entropy_decay_episodes"] = int(entropy_decay_episodes)
         meta["ppo_value_coef"] = float(value_coef)
+        meta["ppo_rollout_episodes_per_update"] = int(rollout_episodes_per_update)
         json.dump(meta, f, indent=2, ensure_ascii=False)
 
     training_rows: list[dict] = []
     summary_rows: list[dict] = []
     global_step = 0
     run_t0 = time.time()
+    batch_rollout = PPORollout()
+    batch_episode_count = 0
+    rollout_episodes_per_update = max(1, int(rollout_episodes_per_update))
 
     for ep in range(int(episodes)):
         ep_t0 = time.time()
         obs = env.reset(seed=config.random_seed + ep)
         done = False
-        rollout = PPORollout()
+        episode_rollout = PPORollout()
         ep_reward = 0.0
         ep_physical_reward = 0.0
         ep_reward_baseline = 0.0
@@ -110,7 +131,7 @@ def train(
             action, log_prob, value = agent.select_action(obs)
             next_obs, reward, terminated, truncated, info = env.step(action)
             done = bool(terminated or truncated)
-            rollout.push(obs, action, log_prob, reward, done, value)
+            episode_rollout.push(obs, action, log_prob, reward, done, value)
 
             row = {
                 "episode": ep,
@@ -134,7 +155,40 @@ def train(
             ep_steps += 1
             global_step += 1
 
-        metrics = agent.update(rollout, last_value=0.0)
+        batch_rollout.extend(episode_rollout)
+        batch_episode_count += 1
+        metrics = {
+            "policy_loss": np.nan,
+            "value_loss": np.nan,
+            "entropy": np.nan,
+            "approx_kl": np.nan,
+            "ppo_updated": 0,
+            "ppo_batch_episodes": batch_episode_count,
+            "ppo_entropy_coef": agent.entropy_coef,
+        }
+        should_update = (
+            batch_episode_count >= rollout_episodes_per_update
+            or ep == int(episodes) - 1
+        )
+        if should_update:
+            current_entropy_coef = entropy_coef_at_episode(
+                ep,
+                entropy_coef_start,
+                entropy_coef_end,
+                entropy_decay_episodes,
+            )
+            agent.entropy_coef = current_entropy_coef
+            metrics = agent.update(batch_rollout, last_value=0.0)
+            metrics.update(
+                {
+                    "ppo_updated": 1,
+                    "ppo_batch_episodes": batch_episode_count,
+                    "ppo_entropy_coef": current_entropy_coef,
+                }
+            )
+            batch_rollout = PPORollout()
+            batch_episode_count = 0
+
         summary_rows.append(
             {
                 "episode": ep,
@@ -165,18 +219,39 @@ def train(
         print(
             f"ppo episode {ep + 1:03d}/{episodes} "
             f"reward={ep_reward:.3f} produced={ep_produced:.3f} "
-            f"consumed={ep_consumed:.3f} penalty={ep_penalty:.3f}",
+            f"consumed={ep_consumed:.3f} penalty={ep_penalty:.3f} "
+            f"updated={metrics['ppo_updated']} entropy_coef={metrics['ppo_entropy_coef']:.5f}",
             flush=True,
         )
 
-    _, internal_df = deterministic_rollout_policy(
+    _, deterministic_internal_df = deterministic_rollout_policy(
         config,
         output_dir,
         select_action=lambda obs: agent.act(obs, deterministic=True),
         episode_days=config.season_episode_days,
+        prefix="deterministic_policy",
+    )
+    torch.manual_seed(config.random_seed + 20_000)
+    _, stochastic_internal_df = deterministic_rollout_policy(
+        config,
+        output_dir,
+        select_action=lambda obs: agent.act(obs, deterministic=False),
+        episode_days=config.season_episode_days,
+        prefix="stochastic_policy",
     )
     plot_training_reward(output_dir, "PPO training reward")
-    plot_rollout_basic(output_dir, internal_df, "PPO deterministic rollout")
+    plot_rollout_basic(
+        output_dir,
+        deterministic_internal_df,
+        "PPO deterministic rollout",
+        filename="deterministic_rollout.png",
+    )
+    plot_rollout_basic(
+        output_dir,
+        stochastic_internal_df,
+        "PPO stochastic rollout",
+        filename="stochastic_rollout.png",
+    )
     torch.save(agent.network.state_dict(), output_dir / "ppo_actor_critic.pt")
     return output_dir
 
@@ -203,7 +278,10 @@ def main() -> None:
     parser.add_argument("--minibatch-size", type=int, default=64)
     parser.add_argument("--gae-lambda", type=float, default=0.95)
     parser.add_argument("--clip-coef", type=float, default=0.2)
-    parser.add_argument("--entropy-coef", type=float, default=0.01)
+    parser.add_argument("--entropy-coef-start", type=float, default=0.01)
+    parser.add_argument("--entropy-coef-end", type=float, default=0.001)
+    parser.add_argument("--entropy-decay-episodes", type=int, default=100)
+    parser.add_argument("--rollout-episodes-per-update", type=int, default=10)
     parser.add_argument("--value-coef", type=float, default=0.5)
     args = parser.parse_args()
 
@@ -222,8 +300,11 @@ def main() -> None:
         minibatch_size=args.minibatch_size,
         gae_lambda=args.gae_lambda,
         clip_coef=args.clip_coef,
-        entropy_coef=args.entropy_coef,
+        entropy_coef_start=args.entropy_coef_start,
+        entropy_coef_end=args.entropy_coef_end,
+        entropy_decay_episodes=args.entropy_decay_episodes,
         value_coef=args.value_coef,
+        rollout_episodes_per_update=args.rollout_episodes_per_update,
     )
     print(f"saved: {output_dir}", flush=True)
 

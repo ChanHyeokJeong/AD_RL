@@ -33,6 +33,14 @@ class PPORollout:
         self.dones.append(bool(done))
         self.values.append(float(value))
 
+    def extend(self, other: "PPORollout") -> None:
+        self.observations.extend(other.observations)
+        self.actions.extend(other.actions)
+        self.log_probs.extend(other.log_probs)
+        self.rewards.extend(other.rewards)
+        self.dones.extend(other.dones)
+        self.values.extend(other.values)
+
     def __len__(self) -> int:
         return len(self.rewards)
 

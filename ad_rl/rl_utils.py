@@ -94,7 +94,7 @@ def plot_training_reward(output_dir: Path, title: str) -> None:
     plt.close(fig)
 
 
-def plot_rollout_basic(output_dir: Path, internal_df: pd.DataFrame, title: str) -> None:
+def plot_rollout_basic(output_dir: Path, internal_df: pd.DataFrame, title: str, filename: str = "deterministic_rollout.png") -> None:
     if internal_df.empty:
         return
     x = internal_df["episode_elapsed_d"]
@@ -125,5 +125,5 @@ def plot_rollout_basic(output_dir: Path, internal_df: pd.DataFrame, title: str) 
 
     fig.suptitle(title)
     fig.tight_layout()
-    fig.savefig(output_dir / "deterministic_rollout.png", dpi=200)
+    fig.savefig(output_dir / filename, dpi=200)
     plt.close(fig)
