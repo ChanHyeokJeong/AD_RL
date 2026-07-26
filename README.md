@@ -105,6 +105,14 @@ QMIX-style online smoke run:
 python .\train_full_pyadm1_qmix.py --episodes 2 --episode-days 1 --run-name qmix_smoke
 ```
 
+
+
+PPO-style online smoke run:
+
+```powershell
+python .\train_full_pyadm1_ppo.py --episodes 2 --episode-days 1 --run-name ppo_smoke
+```
+
 Discrete IQL/IDQL-style offline smoke run:
 
 ```powershell
