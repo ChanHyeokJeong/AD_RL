@@ -93,3 +93,30 @@ Best checkpoint from the 1000-episode run:
 
 Representative figures are stored under `examples/best_checkpoint_rollout/`.
 
+## Additional Algorithm Scripts
+
+The same PyADM1 + PI-control Gym environment can also be trained with the two
+reference-inspired algorithms below. The action remains the same supervisory
+`T_setpoint` change used by the DQN script.
+
+QMIX-style online smoke run:
+
+```powershell
+python .\train_full_pyadm1_qmix.py --episodes 2 --episode-days 1 --run-name qmix_smoke
+```
+
+Discrete IQL/IDQL-style offline smoke run:
+
+```powershell
+python .\train_full_pyadm1_iql.py --dataset-episodes 2 --updates 100 --episode-days 1 --run-name iql_smoke
+```
+
+Notes:
+
+- `train_full_pyadm1_qmix.py` keeps `n_agents=1` so that the control mechanism
+  is identical to the DQN setpoint controller. The mixer remains in the code so
+  the implementation can later be extended to multiple coordinated decisions.
+- `train_full_pyadm1_iql.py` implements a discrete-action IQL variant in PyTorch.
+  The supplied SBR reference uses JAXRL5/DDPM-IQL for offline RL, but PyADM1
+  currently uses a discrete setpoint action, so a discrete IQL implementation is
+  the minimal dependency version.
