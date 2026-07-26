@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 import numpy as np
 import pandas as pd
 
-from config import RLConfig
+from ad_rl.config import RLConfig
 
 
 @dataclass

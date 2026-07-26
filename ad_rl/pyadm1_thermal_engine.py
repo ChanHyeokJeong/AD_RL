@@ -10,7 +10,7 @@ import numpy as np
 import pandas as pd
 import scipy.integrate
 
-from config import RLConfig
+from ad_rl.config import RLConfig
 
 
 ADM_STATE_NAMES = [

@@ -20,10 +20,10 @@ import pandas as pd
 import torch
 from torch import nn
 
-from config import RLConfig, RUN_DIR
-from dqn_agent import QNetwork, ReplayBuffer, epsilon_by_step
-from full_pyadm1_env import FullPyADM1PISetpointEnv
-from train_full_pyadm1_season_200_fixed import (
+from ad_rl.config import RLConfig, RUN_DIR
+from ad_rl.dqn_agent import QNetwork, ReplayBuffer, epsilon_by_step
+from ad_rl.full_pyadm1_env import FullPyADM1PISetpointEnv
+from scripts.train_full_pyadm1_season_200_fixed import (
     deterministic_rollout,
     plot_rollout,
     plot_training,

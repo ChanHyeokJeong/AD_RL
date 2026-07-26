@@ -7,8 +7,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from config import RLConfig, ensure_run_dir
-from full_pyadm1_env import FullPyADM1PISetpointEnv
+from ad_rl.config import RLConfig, ensure_run_dir
+from ad_rl.full_pyadm1_env import FullPyADM1PISetpointEnv
 
 
 SUBSTRATE_STATES = [

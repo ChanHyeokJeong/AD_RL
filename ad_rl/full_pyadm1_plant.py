@@ -5,9 +5,9 @@ from collections import deque
 import numpy as np
 import pandas as pd
 
-from config import RLConfig
-from plant import PlantState, StepTotals
-from pyadm1_thermal_engine import PyADM1ThermalEngine
+from ad_rl.config import RLConfig
+from ad_rl.plant import PlantState, StepTotals
+from ad_rl.pyadm1_thermal_engine import PyADM1ThermalEngine
 
 
 class FullPyADM1PIPlant:

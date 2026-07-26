@@ -24,13 +24,19 @@ Large run artifacts are intentionally excluded from git:
 
 ## Main Files
 
-- `config.py`: paths, thermal/RL constants, action set, reward settings
-- `pyadm1_thermal_engine.py`: interval wrapper around `PyADM1_thermal.py`
-- `full_pyadm1_plant.py`: full PyADM1 plant plus PI heater controller
-- `full_pyadm1_env.py`: Gym environment
-- `dqn_agent.py`: DQN network and replay buffer
-- `train_full_pyadm1_temp_penalty_consumption.py`: main training script
-- `validate_full_pyadm1_env.py`: quick environment validation
+Root-level scripts are the commands most users run directly:
+
+- `train_full_pyadm1_temp_penalty_consumption.py`: main DQN training script
+- `validate_full_pyadm1_env.py`: quick full-engine validation
+- `plot_full_pyadm1_episode_internal_timeseries.py`: diagnostic rollout plotter
+
+Supporting code is grouped under subfolders:
+
+- `ad_rl/`: reusable environment, plant, PyADM1 engine, config, and DQN modules
+- `scripts/`: helper or legacy training/plotting utilities imported by the main scripts
+- `docs/`: model/reward design notes
+- `data/`: minimal input files needed to run the model
+- `examples/`: lightweight representative figures and summary CSVs
 
 ## Data
 
@@ -71,7 +77,7 @@ python .\train_full_pyadm1_temp_penalty_consumption.py --episodes 2 --episode-da
 Long run used for the current saved result:
 
 ```powershell
-python .\train_full_pyadm1_temp_penalty_consumption.py --episodes 1000 --episode-days 90 --run-name 순메탄보상_페널티없음_1000회 --production-weight 1 --consumption-weight 1 --temp-penalty-per-event 0 --reward-scale 100 --learning-rate 2e-4 --target-update-steps 500 --replay-capacity 100000 --t-setpoint-min-C 25 --t-setpoint-max-C 65 --eval-checkpoints
+python .\train_full_pyadm1_temp_penalty_consumption.py --episodes 1000 --episode-days 90 --run-name net_methane_no_penalty_1000ep --production-weight 1 --consumption-weight 1 --temp-penalty-per-event 0 --reward-scale 100 --learning-rate 2e-4 --target-update-steps 500 --replay-capacity 100000 --t-setpoint-min-C 25 --t-setpoint-max-C 65 --eval-checkpoints
 ```
 
 ## Current Reference Result

@@ -20,9 +20,9 @@ import pandas as pd
 import torch
 from torch import nn
 
-from config import RLConfig, RUN_DIR
-from dqn_agent import QNetwork, ReplayBuffer, epsilon_by_step
-from full_pyadm1_env import FullPyADM1PISetpointEnv
+from ad_rl.config import RLConfig, RUN_DIR
+from ad_rl.dqn_agent import QNetwork, ReplayBuffer, epsilon_by_step
+from ad_rl.full_pyadm1_env import FullPyADM1PISetpointEnv
 
 
 EPISODES = 200

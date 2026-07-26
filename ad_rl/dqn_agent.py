@@ -17,8 +17,8 @@ import gym
 import torch
 from torch import nn
 
-from config import RLConfig, ensure_run_dir
-from env import PyADM1PISetpointEnv
+from ad_rl.config import RLConfig, ensure_run_dir
+from ad_rl.env import PyADM1PISetpointEnv
 
 
 class QNetwork(nn.Module):

@@ -4,12 +4,12 @@ import gym
 import numpy as np
 from gym import spaces
 
-from config import RLConfig
-from full_pyadm1_plant import FullPyADM1PIPlant
+from ad_rl.config import RLConfig
+from ad_rl.plant import ThermalPIPlant
 
 
-class FullPyADM1PISetpointEnv(gym.Env):
-    """Gym wrapper that calls full PyADM1 dynamics inside each step."""
+class PyADM1PISetpointEnv(gym.Env):
+    """Gym wrapper for RL-based T_setpoint optimization."""
 
     metadata = {"render_modes": []}
 
@@ -25,12 +25,14 @@ class FullPyADM1PISetpointEnv(gym.Env):
         self.start_day = float(start_day)
         self.max_episode_steps = int(np.ceil(self.episode_days * 24.0 / self.config.decision_interval_h))
         self.current_step = 0
-        self.plant = FullPyADM1PIPlant(self.config)
+        self.plant = ThermalPIPlant(self.config)
         self.action_space = spaces.Discrete(len(self.config.action_deltas_C))
+
+        obs_dim = len(self.plant.observation_names)
         self.observation_space = spaces.Box(
             low=-np.inf,
             high=np.inf,
-            shape=(len(self.plant.observation_names),),
+            shape=(obs_dim,),
             dtype=np.float32,
         )
         self.last_info: dict = {}
@@ -40,6 +42,12 @@ class FullPyADM1PISetpointEnv(gym.Env):
         return self.plant.observation_names
 
     def reset(self, *, seed: int | None = None, options: dict | None = None):
+        # ADDED: deterministic Gym reset.
+        # Reason: RL validation requires reset reproducibility and seasonal
+        # episodes require configurable start days.
+        # Role: reset the wrapped plant to ADM1 equilibrium plus current season
+        # day and return an observation containing T_setpoint.
+        # Reference: RL checklist R4 and R5.
         super().reset(seed=seed)
         options = options or {}
         start_day = float(options.get("start_day", self.start_day))
@@ -50,6 +58,12 @@ class FullPyADM1PISetpointEnv(gym.Env):
         return self.plant.observation()
 
     def step(self, action: int):
+        # ADDED: RL action-to-setpoint bridge.
+        # Reason: DQN action must change the PI controller's T_setpoint, then
+        # the PI controller handles methane-heater MV inside the interval.
+        # Role: map action index to delta T_setpoint, simulate N h, and return
+        # NPV-style methane reward plus safety penalty.
+        # Reference: user-requested action, reward, and penalty definitions.
         action = int(action)
         if action < 0 or action >= len(self.config.action_deltas_C):
             raise ValueError(f"Invalid action index: {action}")
@@ -63,14 +77,7 @@ class FullPyADM1PISetpointEnv(gym.Env):
         remaining_h = max(0.0, (self.episode_days - elapsed_before) * 24.0)
         interval_h = min(self.config.decision_interval_h, remaining_h)
         totals = self.plant.simulate_interval(interval_h)
-        penalty += self.plant.reactor_temperature_change_penalty()
         totals = self.plant.reward_from_totals(totals, penalty)
-        physical_reward = float(totals.reward)
-        reward_baseline = self._reward_baseline(interval_h)
-        learning_reward = (
-            physical_reward - reward_baseline
-        ) / max(1e-12, self.config.reward_scale)
-
         reward_without_penalty = (
             self.config.reward_methane_production_weight
             * totals.methane_produced_m3
@@ -81,7 +88,6 @@ class FullPyADM1PISetpointEnv(gym.Env):
                 * totals.methane_consumed_m3
             )
         reward_without_penalty *= self.config.methane_price
-
         Tin_C, Q_m3_d = self.plant.influent_at(self.plant.state.time_d)
         tracking_error_C = self.plant.state.T_setpoint_C - self.plant.state.T_reactor_C
         heater_use_to_prod_pct = (
@@ -95,6 +101,7 @@ class FullPyADM1PISetpointEnv(gym.Env):
         elapsed = self.plant.state.time_d - self.plant.state.episode_start_d
         terminated = elapsed >= self.episode_days - 1e-12
         truncated = False
+
         obs = self.plant.observation()
         self.current_step += 1
         info = {
@@ -106,9 +113,7 @@ class FullPyADM1PISetpointEnv(gym.Env):
             "net_methane_m3": totals.methane_produced_m3 - totals.methane_consumed_m3,
             "penalty": totals.penalty,
             "reward_without_penalty": reward_without_penalty,
-            "physical_reward": physical_reward,
-            "reward_baseline": reward_baseline,
-            "reward": learning_reward,
+            "reward": totals.reward,
             "time_d": self.plant.state.time_d,
             "episode_elapsed_d": elapsed,
             "episode_step": self.current_step,
@@ -125,12 +130,6 @@ class FullPyADM1PISetpointEnv(gym.Env):
             "tracking_squared_error_C2": tracking_error_C * tracking_error_C,
             "daily_setpoint_change_C": self.plant.last_daily_setpoint_change_C,
             "setpoint_penalty_excess_C": self.plant.last_setpoint_penalty_excess_C,
-            "reactor_24h_change_C": self.plant.last_reactor_24h_change_C,
-            "reactor_temp_penalty_event": self.plant.last_reactor_temp_penalty_event,
-            "reactor_temp_penalty_excess_C": self.plant.last_reactor_temp_penalty_excess_C,
-            "T_adapt_C": self.plant.engine.adapted_temperature_C(),
-            "methanogenesis_shock_factor": self.plant.engine.methanogenesis_shock_factor(),
-            "methanogenesis_temp_mismatch_K": self.plant.engine.methanogenesis_temp_mismatch_K(),
             "q_ch4_heater_m3_d": self.plant.accounted_heater_use_rate(
                 self.plant.state.q_ch4_heater_m3_d
             ),
@@ -138,20 +137,9 @@ class FullPyADM1PISetpointEnv(gym.Env):
             "q_ch4_prod_m3_d": self.plant.state.q_ch4_prod_m3_d,
             "heater_use_to_prod_pct": heater_use_to_prod_pct,
         }
-        info.update(self.plant.internal_delta_summary(top_n=8))
         terminated = terminated or self.current_step >= self.max_episode_steps
         self.last_info = info
-        return obs, float(learning_reward), terminated, truncated, info
+        return obs, float(totals.reward), terminated, truncated, info
 
     def render(self):
         return self.last_info
-
-    def _reward_baseline(self, interval_h: float) -> float:
-        if not self.config.reward_subtract_baseline:
-            return 0.0
-        interval_d = float(interval_h) / 24.0
-        return (
-            self.config.methane_price
-            * self.config.reward_baseline_methane_m3_d
-            * interval_d
-        )
