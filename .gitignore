@@ -1,0 +1,19 @@
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+
+runs/
+logs/
+*.pt
+*.pth
+checkpoint_*.json
+
+# Keep lightweight example outputs, but avoid accidental large CSV dumps.
+deterministic_policy_internal_timeseries.csv
+training_steps.csv
+
