@@ -1,4 +1,4 @@
-# 2-stage pH direct-dosing DQN experiment
+# 2-stage pH direct-dosing DQN/PPO experiment
 
 Date: 2026-07-30
 
@@ -13,9 +13,9 @@ This experiment starts the RL formulation for the 2-stage ADM1 pH-control proble
   - Stage 2 HCl
 - Chemical use is penalized in the reward.
 
-## Initial DQN action space
+## Initial DQN/PPO action space
 
-DQN uses a discrete action table. To avoid wasting chemical by adding acid and base to the same reactor in the same interval, each reactor uses one signed dosing command:
+DQN and PPO use the same discrete action table. To avoid wasting chemical by adding acid and base to the same reactor in the same interval, each reactor uses one signed dosing command:
 
 - Negative signed flow = HCl dosing.
 - Positive signed flow = NaOH dosing.
@@ -28,7 +28,7 @@ Stage 1 signed flow, m3/d: [-0.60, -0.20, 0.00, +0.10, +0.30]
 Stage 2 signed flow, m3/d: [-20.0, -5.0, 0.0, +5.0, +20.0]
 ```
 
-The Cartesian product gives 25 DQN actions and still covers all four physical pumps.
+The Cartesian product gives 25 discrete actions and still covers all four physical pumps.
 
 ## Reward
 
@@ -79,10 +79,17 @@ From the repository root:
 python .\experiments\pH_control_2stage_rl_dqn_20260730\code\train_dqn_4actuator.py --episodes 5 --episode-days 2 --run-name ph2stage_dqn_4actuator_smoke
 ```
 
+PPO uses the same environment, action table, reward, and baselines:
+
+```powershell
+python .\experiments\pH_control_2stage_rl_dqn_20260730\code\train_ppo_4actuator.py --episodes 5 --episode-days 2 --run-name ph2stage_ppo_4actuator_smoke
+```
+
 Faster syntax check without the baseline grid:
 
 ```powershell
 python .\experiments\pH_control_2stage_rl_dqn_20260730\code\train_dqn_4actuator.py --episodes 1 --episode-days 0.25 --run-name ph2stage_dqn_quickcheck --skip-baselines
+python .\experiments\pH_control_2stage_rl_dqn_20260730\code\train_ppo_4actuator.py --episodes 2 --episode-days 0.25 --run-name ph2stage_ppo_quickcheck --skip-baselines
 ```
 
 ## Outputs
@@ -100,13 +107,65 @@ Important files:
 - `training_steps.csv`
 - `episode_summary.csv`
 - `dqn_policy_decision_steps.csv`
+- `ppo_policy_decision_steps.csv`
 - `dqn_policy_internal_timeseries.csv`
+- `ppo_policy_internal_timeseries.csv`
+- `ppo_update_summary.csv`
 - `baseline_fixed_action_summary.csv`
 - `baseline_fixed_pH7_PI_decision_steps.csv`
 - `comparison_summary.csv`
 - `dqn_policy_rollout.png`
+- `ppo_policy_rollout.png`
 - `baseline_best_action_rollout.png`
 - `baseline_fixed_pH7_PI_rollout.png`
+
+## 7 d / 100 episode PPO methane-reward comparison, chemical weight 0.2
+
+This run uses a 7 d horizon, 100 PPO training episodes, the full 25-action fixed dosing grid, the fixed pH 7 PI baseline, the default `methane_total` reward, and `chemical_kmol_weight = 0.2`.
+
+```powershell
+python .\experiments\pH_control_2stage_rl_dqn_20260730\code\train_ppo_4actuator.py --episodes 100 --episode-days 7.0 --run-name ph2stage_ppo_7d_100ep_methane_reward_chem0p2_compare
+```
+
+| Policy | Reward | Raw reward | Chemical use |
+| --- | ---: | ---: | ---: |
+| PPO deterministic after 100 episodes | 77.0218 | 7702.1781 | 52.500 kmol |
+| Best fixed dosing open-loop | 77.0218 | 7702.1781 | 52.500 kmol |
+| Zero dosing open-loop | 73.3706 | 7337.0637 | 0.000 kmol |
+| Fixed pH 7 PI, both stages | 29.6599 | 2965.9902 | 5006.192 kmol |
+
+The deterministic PPO policy converged to the same operating point as the best fixed dosing action:
+
+```text
+action = 22
+Stage 1: NaOH 0.3 m3/d
+Stage 2: no dosing
+```
+
+Interpretation: PPO found the low-chemical best fixed dosing policy in this 7 d deterministic-influent check. It did not exceed the fixed grid baseline here, which is expected if the environment has no dynamic influent disturbance during the episode and the optimal response is close to static dosing.
+
+Detailed outputs:
+
+- `results/ppo_7d_100ep_methane_reward_chem0p2_comparison_summary.csv`
+- `results/ppo_7d_100ep_methane_reward_chem0p2_baseline_fixed_action_summary.csv`
+- `results/ppo_7d_100ep_methane_reward_chem0p2_episode_summary.csv`
+- `results/ppo_7d_100ep_methane_reward_chem0p2_policy_decision_steps.csv`
+- `results/ppo_7d_100ep_methane_reward_chem0p2_fixed_pH7_PI_decision_steps.csv`
+- `results/ppo_7d_100ep_methane_reward_chem0p2_update_summary.csv`
+- `results/ppo_7d_100ep_methane_reward_chem0p2_policy_summary.json`
+- `results/ppo_7d_100ep_methane_reward_chem0p2_hyperparameters.json`
+
+### 7 d methane-reward chem0p2 PPO rollout
+
+![7 d methane-reward chem0p2 PPO rollout](figures/ppo_7d_100ep_methane_reward_chem0p2_policy_rollout.png)
+
+### 7 d methane-reward chem0p2 PPO best fixed dosing rollout
+
+![7 d methane-reward chem0p2 PPO best fixed dosing rollout](figures/ppo_7d_100ep_methane_reward_chem0p2_baseline_best_action_rollout.png)
+
+### 7 d methane-reward chem0p2 PPO fixed pH 7 PI rollout
+
+![7 d methane-reward chem0p2 PPO fixed pH 7 PI rollout](figures/ppo_7d_100ep_methane_reward_chem0p2_fixed_pH7_PI_rollout.png)
 
 ## 7 d / 100 episode methane-reward comparison, chemical weight 0.2
 
