@@ -119,6 +119,57 @@ Important files:
 - `baseline_best_action_rollout.png`
 - `baseline_fixed_pH7_PI_rollout.png`
 
+## 7 d / 1000 episode PPO methane-reward comparison, chemical weight 0.2
+
+This run extends PPO training to 1000 episodes with the same reward and baseline setup used for the DQN 1000 comparison.
+
+```powershell
+python .\experiments\pH_control_2stage_rl_dqn_20260730\code\train_ppo_4actuator.py --episodes 1000 --episode-days 7.0 --run-name ph2stage_ppo_7d_1000ep_methane_reward_chem0p2_compare_full
+```
+
+| Policy | Reward | Raw reward | Chemical use |
+| --- | ---: | ---: | ---: |
+| PPO deterministic after 1000 episodes | 84.4981 | 8449.8090 | 183.128 kmol |
+| DQN deterministic after 1000 episodes | 83.5893 | 8358.9296 | 526.705 kmol |
+| Best fixed dosing open-loop | 77.0218 | 7702.1781 | 52.500 kmol |
+| Zero dosing open-loop | 73.3706 | 7337.0637 | 0.000 kmol |
+| Fixed pH 7 PI, both stages | 29.6599 | 2965.9902 | 5006.192 kmol |
+
+Compared with 100-episode PPO, 1000-episode PPO moved away from the static best fixed action and found a dynamic low-chemical policy. It slightly outperformed the DQN 1000 deterministic policy while using about 35% of the DQN 1000 chemical amount.
+
+The deterministic 1000-episode PPO policy used only three actions:
+
+```text
+action 07: 27 steps, Stage 1 HCl 0.2 m3/d, Stage 2 no dosing
+action 21: 21 steps, Stage 1 NaOH 0.3 m3/d, Stage 2 HCl 5.0 m3/d
+action 22:  8 steps, Stage 1 NaOH 0.3 m3/d, Stage 2 no dosing
+```
+
+Interpretation: PPO needed longer training than the first 100-episode check, but the 1000-episode policy found the better tradeoff among methane production, pH violation, and chemical economy under this deterministic influent case.
+
+Detailed outputs:
+
+- `results/ppo_7d_1000ep_methane_reward_chem0p2_comparison_summary.csv`
+- `results/ppo_7d_1000ep_methane_reward_chem0p2_baseline_fixed_action_summary.csv`
+- `results/ppo_7d_1000ep_methane_reward_chem0p2_episode_summary.csv`
+- `results/ppo_7d_1000ep_methane_reward_chem0p2_policy_decision_steps.csv`
+- `results/ppo_7d_1000ep_methane_reward_chem0p2_fixed_pH7_PI_decision_steps.csv`
+- `results/ppo_7d_1000ep_methane_reward_chem0p2_update_summary.csv`
+- `results/ppo_7d_1000ep_methane_reward_chem0p2_policy_summary.json`
+- `results/ppo_7d_1000ep_methane_reward_chem0p2_hyperparameters.json`
+
+### 7 d methane-reward chem0p2 PPO 1000 rollout
+
+![7 d methane-reward chem0p2 PPO 1000 rollout](figures/ppo_7d_1000ep_methane_reward_chem0p2_policy_rollout.png)
+
+### 7 d methane-reward chem0p2 PPO 1000 best fixed dosing rollout
+
+![7 d methane-reward chem0p2 PPO 1000 best fixed dosing rollout](figures/ppo_7d_1000ep_methane_reward_chem0p2_baseline_best_action_rollout.png)
+
+### 7 d methane-reward chem0p2 PPO 1000 fixed pH 7 PI rollout
+
+![7 d methane-reward chem0p2 PPO 1000 fixed pH 7 PI rollout](figures/ppo_7d_1000ep_methane_reward_chem0p2_fixed_pH7_PI_rollout.png)
+
 ## 7 d / 100 episode PPO methane-reward comparison, chemical weight 0.2
 
 This run uses a 7 d horizon, 100 PPO training episodes, the full 25-action fixed dosing grid, the fixed pH 7 PI baseline, the default `methane_total` reward, and `chemical_kmol_weight = 0.2`.
