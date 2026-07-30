@@ -32,6 +32,8 @@ class PHControlRLConfig:
     stage1_vfa_production_weight: float = 1.0
     stage2_vfa_removal_weight: float = 1.0
     stage2_methane_weight: float = 0.1
+    reward_mode: str = "methane_total"
+    methane_reward_weight: float = 1.0
     chemical_kmol_weight: float = 0.03
     ph_violation_weight: float = 500.0
 
@@ -386,11 +388,18 @@ class TwoStagePHDirectDosingPlant:
         return totals
 
     def reward_terms(self, totals: dict[str, float]) -> dict[str, float]:
-        benefit = (
-            self.config.stage1_vfa_production_weight * totals["stage1_vfa_produced_kgCOD"]
-            + self.config.stage2_vfa_removal_weight * totals["stage2_vfa_removed_kgCOD"]
-            + self.config.stage2_methane_weight * totals["stage2_ch4_m3"]
-        )
+        if self.config.reward_mode == "staged_vfa_ch4":
+            benefit = (
+                self.config.stage1_vfa_production_weight * totals["stage1_vfa_produced_kgCOD"]
+                + self.config.stage2_vfa_removal_weight * totals["stage2_vfa_removed_kgCOD"]
+                + self.config.stage2_methane_weight * totals["stage2_ch4_m3"]
+            )
+        elif self.config.reward_mode == "stage2_methane":
+            benefit = self.config.methane_reward_weight * totals["stage2_ch4_m3"]
+        elif self.config.reward_mode == "methane_total":
+            benefit = self.config.methane_reward_weight * totals["total_ch4_m3"]
+        else:
+            raise ValueError(f"Unknown reward_mode: {self.config.reward_mode}")
         chemical_cost = self.config.chemical_kmol_weight * totals["chemical_kmol"]
         ph_cost = self.config.ph_violation_weight * totals["ph_violation_pH_d"]
         raw_reward = benefit - chemical_cost - ph_cost

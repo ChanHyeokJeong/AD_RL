@@ -36,9 +36,7 @@ For each 3 h decision interval:
 
 ```text
 benefit =
-    1.0 * Stage1_VFA_produced_kgCOD
-  + 1.0 * Stage2_VFA_removed_kgCOD
-  + 0.1 * Stage2_CH4_m3
+    1.0 * total_CH4_m3
 
 cost =
     chemical_kmol_weight * total_chemical_kmol
@@ -46,6 +44,8 @@ cost =
 
 reward = (benefit - cost) / reward_scale
 ```
+
+The default reward mode is now `methane_total`. Stage 1 VFA production, Stage 2 VFA removal, Stage 2 VFA conversion, and CH4/VFA-in are still logged as diagnostics. The previous mixed objective is still available with `--reward-mode staged_vfa_ch4`.
 
 Default safety bands:
 
@@ -108,12 +108,57 @@ Important files:
 - `baseline_best_action_rollout.png`
 - `baseline_fixed_pH7_PI_rollout.png`
 
-## 7 d / 100 episode comparison
+## 7 d / 100 episode methane-reward comparison
 
-This run uses a 7 d horizon, 100 DQN training episodes, the full 25-action fixed dosing grid, and the fixed pH 7 PI baseline.
+This run uses a 7 d horizon, 100 DQN training episodes, the full 25-action fixed dosing grid, the fixed pH 7 PI baseline, and the default `methane_total` reward.
 
 ```powershell
-python .\experiments\pH_control_2stage_rl_dqn_20260730\code\train_dqn_4actuator.py --episodes 100 --episode-days 7.0 --run-name ph2stage_dqn_7d_100ep_compare
+python .\experiments\pH_control_2stage_rl_dqn_20260730\code\train_dqn_4actuator.py --episodes 100 --episode-days 7.0 --run-name ph2stage_dqn_7d_100ep_methane_reward_compare
+```
+
+| Policy | Reward | Raw reward | Chemical use |
+| --- | ---: | ---: | ---: |
+| DQN deterministic after 100 episodes | 79.5510 | 7955.1044 | 1045.188 kmol |
+| Best fixed dosing open-loop | 77.1110 | 7711.1031 | 52.500 kmol |
+| Zero dosing open-loop | 73.3706 | 7337.0637 | 0.000 kmol |
+| Fixed pH 7 PI, both stages | 38.1704 | 3817.0428 | 5006.192 kmol |
+
+Best fixed dosing action in this methane-reward check:
+
+```text
+action = 22
+Stage 1: NaOH 0.3 m3/d
+Stage 2: no dosing
+```
+
+Interpretation: with the methane-centered reward, the 100-episode DQN deterministic policy beats the best fixed dosing and zero-dosing baselines, but it uses substantially more chemical than the best fixed dosing action. The fixed pH 7 PI baseline uses far more chemical and scores poorly under this reward.
+
+Detailed outputs:
+
+- `results/dqn_7d_100ep_methane_reward_comparison_summary.csv`
+- `results/dqn_7d_100ep_methane_reward_baseline_fixed_action_summary.csv`
+- `results/dqn_7d_100ep_methane_reward_episode_summary.csv`
+- `results/dqn_7d_100ep_methane_reward_policy_decision_steps.csv`
+- `results/dqn_7d_100ep_methane_reward_fixed_pH7_PI_decision_steps.csv`
+
+### 7 d methane-reward DQN rollout
+
+![7 d methane-reward DQN rollout](figures/dqn_7d_100ep_methane_reward_policy_rollout.png)
+
+### 7 d methane-reward best fixed dosing rollout
+
+![7 d methane-reward best fixed dosing rollout](figures/dqn_7d_100ep_methane_reward_baseline_best_action_rollout.png)
+
+### 7 d methane-reward fixed pH 7 PI rollout
+
+![7 d methane-reward fixed pH 7 PI rollout](figures/dqn_7d_100ep_methane_reward_fixed_pH7_PI_rollout.png)
+
+## 7 d / 100 episode staged-reward comparison
+
+This previous run uses the older `staged_vfa_ch4` reward with VFA production/removal plus Stage 2 methane.
+
+```powershell
+python .\experiments\pH_control_2stage_rl_dqn_20260730\code\train_dqn_4actuator.py --episodes 100 --episode-days 7.0 --run-name ph2stage_dqn_7d_100ep_compare --reward-mode staged_vfa_ch4
 ```
 
 | Policy | Reward | Raw reward | Chemical use |

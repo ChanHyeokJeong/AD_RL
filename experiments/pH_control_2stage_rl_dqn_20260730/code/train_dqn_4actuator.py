@@ -340,6 +340,12 @@ def main() -> None:
     parser.add_argument("--episode-days", type=float, default=2.0)
     parser.add_argument("--run-name", default="ph2stage_dqn_4actuator_smoke")
     parser.add_argument("--learning-rate", type=float, default=5e-4)
+    parser.add_argument(
+        "--reward-mode",
+        choices=["methane_total", "stage2_methane", "staged_vfa_ch4"],
+        default="methane_total",
+    )
+    parser.add_argument("--methane-reward-weight", type=float, default=1.0)
     parser.add_argument("--reward-scale", type=float, default=100.0)
     parser.add_argument("--chemical-kmol-weight", type=float, default=0.03)
     parser.add_argument("--ph-violation-weight", type=float, default=500.0)
@@ -352,6 +358,8 @@ def main() -> None:
         PHControlRLConfig(),
         episode_days=float(args.episode_days),
         learning_rate=float(args.learning_rate),
+        reward_mode=str(args.reward_mode),
+        methane_reward_weight=float(args.methane_reward_weight),
         reward_scale=float(args.reward_scale),
         chemical_kmol_weight=float(args.chemical_kmol_weight),
         ph_violation_weight=float(args.ph_violation_weight),
