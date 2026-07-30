@@ -1,0 +1,7 @@
+metric,value
+fit_start_original_d,2.0
+fit_end_original_d,280.0
+n_rows,26689.0
+MAE_pH,0.027362204596514332
+RMSE_pH,0.03718485634169375
+R2,0.9970693926285366
