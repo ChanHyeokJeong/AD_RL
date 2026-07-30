@@ -1,0 +1,29 @@
+group,name,value,unit,code_symbol,source_file,notes
+process,Q_AD,178.4674,m3/d,Q_AD,PyADM1_pH_2stage_PRBS.py,Influent flow used by both serial stages.
+process,total_liquid_volume,5354.022,m3,TOTAL_LIQ_VOLUME,PyADM1_pH_2stage_PRBS.py,Q_AD * (stage1_HRT + stage2_HRT).
+process,stage1_volume_fraction,0.2,-,STAGE1_VOLUME_FRACTION,PyADM1_pH_2stage_PRBS.py,Current split is 2:8.
+process,stage2_volume_fraction,0.8,-,STAGE2_VOLUME_FRACTION,PyADM1_pH_2stage_PRBS.py,Current split is 2:8.
+process,stage1_liquid_volume,1070.8044,m3,stage1['V_liq'],PyADM1_pH_2stage_PRBS.py,Equivalent to 6 d HRT.
+process,stage2_liquid_volume,4283.2176,m3,stage2['V_liq'],PyADM1_pH_2stage_PRBS.py,Equivalent to 24 d HRT.
+process,stage1_gas_volume,94.4827411764706,m3,stage1['V_gas'],PyADM1_pH_2stage_PRBS.py,Uses 300/3400 gas/liquid ratio.
+process,stage2_gas_volume,377.9309647058824,m3,stage2['V_gas'],PyADM1_pH_2stage_PRBS.py,Uses 300/3400 gas/liquid ratio.
+process,stage1_total_reactor_volume,1165.2871411764704,m3,stage1['V_ad'],PyADM1_pH_2stage_PRBS.py,Liquid plus gas volume.
+process,stage2_total_reactor_volume,4661.148564705882,m3,stage2['V_ad'],PyADM1_pH_2stage_PRBS.py,Liquid plus gas volume.
+process,stage1_temperature,55.0,degC,STAGE1_TEMP_K,PyADM1_pH_2stage_PRBS.py,Thermophilic front stage.
+process,stage2_temperature,35.0,degC,STAGE2_TEMP_K,PyADM1_pH_2stage_PRBS.py,Mesophilic rear stage.
+process,stage1_HRT,6.0,d,STAGE1_HRT_DAYS,PyADM1_pH_2stage_PRBS.py,Front stage HRT.
+process,stage2_HRT,24.0,d,STAGE2_HRT_DAYS,PyADM1_pH_2stage_PRBS.py,Rear stage HRT.
+dosing,C_NAOH,25.0,kmol/m3,C_NAOH,PyADM1_pH_2stage_PRBS.py,25 M NaOH basis.
+dosing,C_HCL,11.3,kmol/m3,C_HCL,PyADM1_pH_2stage_PRBS.py,35 wt% HCl approximation.
+dosing,q_NaOH_max,100.0,m3/d,Q_NAOH_MAX,PyADM1_pH_2stage_PRBS.py,Pump saturation limit.
+dosing,q_HCl_max,100.0,m3/d,Q_HCL_MAX,PyADM1_pH_2stage_PRBS.py,Pump saturation limit.
+control,control_interval,3.0,h,CONTROL_INTERVAL_DAYS,PyADM1_pH_2stage_PRBS.py,PI output update interval.
+control,ode_log_interval,15.0,min,influent time grid,PyADM1_single_stage_reference.py,Log/ODE step grid from model inputs.
+prbs,low_setpoint,7.0,pH,PRBS_LOW_PH,PyADM1_pH_2stage_PRBS.py,Low PRBS target.
+prbs,high_setpoint,8.4,pH,PRBS_HIGH_PH,PyADM1_pH_2stage_PRBS.py,High PRBS target.
+prbs,dwell_min,0.5,d,PRBS_MIN_DWELL_D,PyADM1_pH_2stage_PRBS.py,Irregular PRBS segment minimum.
+prbs,dwell_max,3.0,d,PRBS_MAX_DWELL_D,PyADM1_pH_2stage_PRBS.py,Irregular PRBS segment maximum.
+prbs,seed,260714.0,-,PRBS_SEED,PyADM1_pH_2stage_PRBS.py,Reproducible irregular PRBS schedule.
+run,time_start,0.0,d,control log,acid_base_control_log_2stage_serial_PRBS.csv,Latest fast-PI PRBS run.
+run,time_end,280.0,d,control log,acid_base_control_log_2stage_serial_PRBS.csv,Latest fast-PI PRBS run.
+run,rows,26881.0,rows,control log,acid_base_control_log_2stage_serial_PRBS.csv,Latest fast-PI PRBS run.

@@ -1,0 +1,24 @@
+group,metric,value,unit,notes
+definition,ITAE_time_basis,segment-local t_rel = t - segment_start,-,"Each PRBS segment is integrated separately, then summed."
+run,duration,280.0,d,Full latest PRBS run.
+run,segments,160,segments,Segments with at least two log points.
+tracking,total_IAE,32.13466759480438,pH*d,Sum of segment IAE.
+tracking,total_ISE,31.01847545083873,pH^2*d,Sum of segment ISE.
+tracking,total_ITAE,7.163673153000882,pH*d^2,Sum of segment-local ITAE.
+tracking,total_ITSE,2.121703269959254,pH^2*d^2,Sum of segment-local ITSE.
+tracking,mean_abs_error_time_weighted,0.1147666699814442,pH,Total IAE / run duration.
+tracking,max_abs_error,1.395519280837469,pH,Maximum absolute pH tracking error.
+tracking,mean_segment_ITAE,0.044772957206255515,pH*d^2,Arithmetic mean over segments.
+tracking,median_segment_ITAE,0.042290141340581365,pH*d^2,Median over segments.
+tracking,mean_up_segment_ITAE,0.04664268937263323,pH*d^2,Mean over low-to-high pH setpoint segments.
+tracking,mean_down_segment_ITAE,0.04320870720815088,pH*d^2,Mean over high-to-low pH setpoint segments.
+tracking,settled_fraction_0p05,0.975,-,Fraction of segments that enter and stay within +/-0.05 pH.
+tracking,median_settle_time_0p05,0.29612556015152336,d,Median over settled segments.
+tracking,max_settle_time_0p05,0.9151604151157642,d,Worst settled segment.
+tracking_after_2d,total_ITAE_after_2d_end_filter,7.144903019254577,pH*d^2,Segments ending after day 2.
+dosing,NaOH_total_volume,642.06713480389,m3,Integral of q_NaOH over time.
+dosing,HCl_total_volume,1487.7770781948423,m3,Integral of q_HCl over time.
+dosing,NaOH_max_flow,49.48261624230368,m3/d,Maximum logged NaOH solution flow.
+dosing,HCl_max_flow,100.0,m3/d,Maximum logged HCl solution flow.
+dosing,NaOH_sat_fraction,0.0,-,Fraction of log rows at NaOH pump limit.
+dosing,HCl_sat_fraction,0.03526654514340984,-,Fraction of log rows at HCl pump limit.
