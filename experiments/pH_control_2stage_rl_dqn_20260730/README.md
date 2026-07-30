@@ -119,6 +119,70 @@ Important files:
 - `baseline_best_action_rollout.png`
 - `baseline_fixed_pH7_PI_rollout.png`
 
+## Original dynamic influent evaluation
+
+The original dynamic influent file from `0. Original code/src/digester_influent.csv` was copied into this experiment as:
+
+```text
+code/digester_influent_original_dynamic.csv
+```
+
+Unlike `digester_influent_mean_full.csv`, the original file contains dynamic influent variation over 0 to 280 d at 15 min resolution. In this file, influent flow `Q` ranges from about 59.5 to 466.4 m3/d. The RL environment now supports `influent_csv`, `use_dynamic_flow`, and nonzero/random episode start days so policies can be evaluated on different original-data windows.
+
+The test below evaluates the existing 1000-episode DQN and PPO policies on eight 7 d windows spanning the original 280 d influent record. It also includes the previous best mean-data fixed action 22, zero dosing, and fixed pH 7 PI.
+
+```powershell
+python .\experiments\pH_control_2stage_rl_dqn_20260730\code\evaluate_dynamic_original_policies.py --episode-days 7.0 --window-count 8 --run-name dynamic_original_dqn_ppo_7d_8windows
+```
+
+Window start days:
+
+```text
+0, 39, 78, 117, 156, 195, 234, 273 d
+```
+
+| Policy | Mean reward | Mean CH4 | Mean chemical | Mean pH violation |
+| --- | ---: | ---: | ---: | ---: |
+| PPO 1000 deterministic | 77.6481 | 9329.7 m3 | 178.076 kmol | 3.058 pH*d |
+| DQN 1000 deterministic | 74.0484 | 8987.2 m3 | 483.358 kmol | 2.971 pH*d |
+| Fixed action 22 | 72.0151 | 9170.6 m3 | 52.500 kmol | 3.917 pH*d |
+| Zero dosing | 69.7996 | 8324.3 m3 | 0.000 kmol | 2.689 pH*d |
+| Fixed pH 7 PI | 25.0931 | 7566.7 m3 | 4891.676 kmol | 8.158 pH*d |
+
+The DQN policy used many more actions under dynamic influent, while PPO stayed close to the compact 3-action policy learned in the 1000-episode steady-window case:
+
+```text
+PPO dynamic action counts over 8 windows:
+action 07: 213 steps, Stage 1 HCl 0.2 m3/d, Stage 2 no dosing
+action 21: 162 steps, Stage 1 NaOH 0.3 m3/d, Stage 2 HCl 5.0 m3/d
+action 22:  73 steps, Stage 1 NaOH 0.3 m3/d, Stage 2 no dosing
+```
+
+Interpretation: under original dynamic influent windows, PPO remains the best tested RL policy. It gives higher mean reward and methane production than DQN while using about 37% of the DQN chemical amount. Fixed action 22 is still chemically efficient, but it loses reward under several dynamic windows.
+
+Detailed outputs:
+
+- `results/dynamic_original_7d_8windows_policy_summary.csv`
+- `results/dynamic_original_7d_8windows_window_summary.csv`
+- `results/dynamic_original_7d_8windows_decision_steps.csv`
+- `results/dynamic_original_7d_8windows_start_days.csv`
+
+### Original dynamic policy summary
+
+![Original dynamic policy summary](figures/dynamic_original_7d_8windows_policy_summary.png)
+
+### Original dynamic window metrics
+
+![Original dynamic window metrics](figures/dynamic_original_7d_8windows_window_metrics.png)
+
+### Original dynamic DQN window 0 rollout
+
+![Original dynamic DQN window 0 rollout](figures/dynamic_original_7d_8windows_dqn_window00_rollout.png)
+
+### Original dynamic PPO window 0 rollout
+
+![Original dynamic PPO window 0 rollout](figures/dynamic_original_7d_8windows_ppo_window00_rollout.png)
+
 ## 7 d / 1000 episode PPO methane-reward comparison, chemical weight 0.2
 
 This run extends PPO training to 1000 episodes with the same reward and baseline setup used for the DQN 1000 comparison.

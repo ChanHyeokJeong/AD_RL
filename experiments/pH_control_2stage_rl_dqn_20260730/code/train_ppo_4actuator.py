@@ -296,6 +296,16 @@ def main() -> None:
     parser.add_argument("--reward-scale", type=float, default=100.0)
     parser.add_argument("--chemical-kmol-weight", type=float, default=0.2)
     parser.add_argument("--ph-violation-weight", type=float, default=500.0)
+    parser.add_argument("--influent-csv", default="digester_influent_mean_full.csv")
+    parser.add_argument("--use-dynamic-flow", action="store_true")
+    parser.add_argument(
+        "--episode-start-mode",
+        choices=["fixed", "random"],
+        default="fixed",
+    )
+    parser.add_argument("--episode-start-day", type=float, default=0.0)
+    parser.add_argument("--episode-start-day-min", type=float, default=0.0)
+    parser.add_argument("--episode-start-day-max", type=float, default=None)
     parser.add_argument("--skip-baselines", action="store_true")
     parser.add_argument("--skip-ph7-baseline", action="store_true")
     parser.add_argument("--baseline-max-actions", type=int, default=None)
@@ -310,6 +320,12 @@ def main() -> None:
         reward_scale=float(args.reward_scale),
         chemical_kmol_weight=float(args.chemical_kmol_weight),
         ph_violation_weight=float(args.ph_violation_weight),
+        influent_csv=str(args.influent_csv),
+        use_dynamic_flow=bool(args.use_dynamic_flow),
+        episode_start_mode=str(args.episode_start_mode),
+        episode_start_day=float(args.episode_start_day),
+        episode_start_day_min=float(args.episode_start_day_min),
+        episode_start_day_max=args.episode_start_day_max,
     )
     output_dir = output_base_dir() / args.run_name
     output_dir.mkdir(parents=True, exist_ok=True)

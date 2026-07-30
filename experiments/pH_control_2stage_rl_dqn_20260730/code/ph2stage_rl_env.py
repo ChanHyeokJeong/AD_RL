@@ -23,6 +23,12 @@ class PHControlRLConfig:
     decision_interval_h: float = 3.0
     reward_scale: float = 100.0
     random_seed: int = 20260730
+    influent_csv: str = "digester_influent_mean_full.csv"
+    use_dynamic_flow: bool = False
+    episode_start_mode: str = "fixed"
+    episode_start_day: float = 0.0
+    episode_start_day_min: float = 0.0
+    episode_start_day_max: float | None = None
 
     # Signed flow convention: negative = HCl, positive = NaOH, unit = m3/d.
     # The table forbids simultaneous acid/base dosing within the same reactor.
@@ -118,11 +124,13 @@ class TwoStagePHDirectDosingPlant:
         self.current_time_d = 0.0
         self.episode_start_d = 0.0
         self.episode_end_d = float(self.config.episode_days)
+        self.selected_episode_start_index = 0
         self.current_action = 0
         self.last_interval_totals: dict[str, float] = {}
         self.last_step_log: list[dict] = []
 
-    def reset(self) -> np.ndarray:
+    def reset(self, seed: int | None = None) -> np.ndarray:
+        base_model.load_influent_csv(self.config.influent_csv)
         self.stage1 = base_model.fresh_reactor(
             "stage1_55C",
             base_model.STAGE1_TEMP_K,
@@ -134,15 +142,58 @@ class TwoStagePHDirectDosingPlant:
             base_model.STAGE2_VOLUME_FRACTION,
         )
         self.time_values = np.asarray(self.stage1["t"], dtype=float)
-        self.current_index = 0
-        self.current_time_d = 0.0
-        self.episode_start_d = 0.0
-        self.episode_end_d = float(self.config.episode_days)
+        self.current_index = self._select_start_index(seed)
+        self.selected_episode_start_index = int(self.current_index)
+        self.current_time_d = float(self.time_values[self.current_index])
+        self.episode_start_d = float(self.current_time_d)
+        self.episode_end_d = min(
+            self.episode_start_d + float(self.config.episode_days),
+            float(self.time_values[-1]),
+        )
+        if self.episode_end_d <= self.episode_start_d:
+            raise ValueError(
+                f"Invalid episode window start={self.episode_start_d} end={self.episode_end_d}"
+            )
         self.current_action = self.hold_action_index()
         self._apply_action_to_reactors(self.current_action)
+        self._apply_dynamic_flow(self.current_index)
         self.last_interval_totals = self._empty_totals()
         self.last_step_log = []
         return self.observation()
+
+    def _select_start_index(self, seed: int | None = None) -> int:
+        max_start_d = max(0.0, float(self.time_values[-1]) - float(self.config.episode_days))
+        mode = str(self.config.episode_start_mode).lower()
+        if mode == "fixed":
+            start_d = float(self.config.episode_start_day)
+        elif mode == "random":
+            low = max(0.0, float(self.config.episode_start_day_min))
+            high = max_start_d
+            if self.config.episode_start_day_max is not None:
+                high = min(high, float(self.config.episode_start_day_max))
+            if high < low:
+                high = low
+            rng = np.random.default_rng(self.config.random_seed if seed is None else int(seed))
+            start_d = float(rng.uniform(low, high)) if high > low else float(low)
+        else:
+            raise ValueError(f"Unknown episode_start_mode: {self.config.episode_start_mode}")
+
+        start_d = min(max(0.0, start_d), max_start_d)
+        idx = int(np.searchsorted(self.time_values, start_d, side="left"))
+        return max(0, min(idx, len(self.time_values) - 2))
+
+    def _apply_dynamic_flow(self, feed_index: int) -> None:
+        if not bool(self.config.use_dynamic_flow):
+            return
+        if self.stage1 is None or self.stage2 is None:
+            return
+        influent_state = self.stage1.get("influent_state")
+        if influent_state is None or "Q" not in influent_state.columns:
+            return
+        q_value = float(influent_state["Q"].iloc[int(feed_index)])
+        if np.isfinite(q_value) and q_value > 0.0:
+            self.stage1["q_ad"] = q_value
+            self.stage2["q_ad"] = q_value
 
     def hold_action_index(self) -> int:
         hold_rows = self.action_table[
@@ -254,6 +305,7 @@ class TwoStagePHDirectDosingPlant:
 
             feed_index = min(self.current_index + 1, len(self.time_values) - 1)
             base_model.set_input_from_influent(self.stage1, feed_index)
+            self._apply_dynamic_flow(feed_index)
             stage1_vfa_in = feed_total(self.stage1, VFA_NAMES)
             stage1_fermentable_in = feed_total(self.stage1, FERMENTABLE_NAMES)
 
@@ -336,6 +388,7 @@ class TwoStagePHDirectDosingPlant:
                 "stage1_q_HCl_m3_d": float(self.stage1["q_HCl"]),
                 "stage2_q_NaOH_m3_d": float(self.stage2["q_NaOH"]),
                 "stage2_q_HCl_m3_d": float(self.stage2["q_HCl"]),
+                "q_ad_m3_d": float(self.stage1["q_ad"]),
             }
             row.update(action_row)
             row.update(increments)
@@ -351,6 +404,10 @@ class TwoStagePHDirectDosingPlant:
             {
                 "time_d": self.current_time_d,
                 "episode_elapsed_d": self.current_time_d - self.episode_start_d,
+                "episode_start_d": self.episode_start_d,
+                "episode_start_index": int(self.selected_episode_start_index),
+                "influent_csv": str(self.config.influent_csv),
+                "use_dynamic_flow": bool(self.config.use_dynamic_flow),
                 "action": int(action),
                 "stage1_signed_m3_d": float(
                     action_row.get(
@@ -374,6 +431,7 @@ class TwoStagePHDirectDosingPlant:
                 "stage1_q_HCl_m3_d": float(self.stage1["q_HCl"]),
                 "stage2_q_NaOH_m3_d": float(self.stage2["q_NaOH"]),
                 "stage2_q_HCl_m3_d": float(self.stage2["q_HCl"]),
+                "q_ad_m3_d": float(self.stage1["q_ad"]),
                 "stage1_q_ch4_m3_d": float(self.stage1["q_ch4"]),
                 "stage2_q_ch4_m3_d": float(self.stage2["q_ch4"]),
                 "stage1_acid_yield": totals["stage1_vfa_produced_kgCOD"]
@@ -482,7 +540,7 @@ class TwoStagePHDirectDosingEnv(gym.Env):
     def reset(self, *, seed: int | None = None, options: dict | None = None):
         super().reset(seed=seed)
         self.last_info = {}
-        return self.plant.reset()
+        return self.plant.reset(seed=seed)
 
     def step(self, action: int):
         totals = self.plant.simulate_decision_interval(int(action))

@@ -60,6 +60,32 @@ FEED_STATE_NAMES = [
     "S_cation", "S_anion",
 ]
 
+DEFAULT_INFLUENT_CSV = BASE_DIR / "digester_influent_mean_full.csv"
+ACTIVE_INFLUENT_PATH = DEFAULT_INFLUENT_CSV
+ACTIVE_INFLUENT_STATE: pd.DataFrame | None = None
+
+
+def resolve_influent_csv(path: str | Path | None = None) -> Path:
+    if path is None or str(path) == "":
+        return DEFAULT_INFLUENT_CSV
+    csv_path = Path(path)
+    if not csv_path.is_absolute():
+        csv_path = BASE_DIR / csv_path
+    return csv_path
+
+
+def load_influent_csv(path: str | Path | None = None) -> pd.DataFrame:
+    global ACTIVE_INFLUENT_PATH, ACTIVE_INFLUENT_STATE
+    csv_path = resolve_influent_csv(path)
+    if ACTIVE_INFLUENT_STATE is None or csv_path != ACTIVE_INFLUENT_PATH:
+        ACTIVE_INFLUENT_PATH = csv_path
+        ACTIVE_INFLUENT_STATE = pd.read_csv(csv_path)
+    return ACTIVE_INFLUENT_STATE
+
+
+def active_influent_state() -> pd.DataFrame:
+    return load_influent_csv(ACTIVE_INFLUENT_PATH)
+
 
 def model_prefix() -> str:
     text = MODEL_SOURCE.read_text(encoding="utf-8")
@@ -73,6 +99,10 @@ MODEL_PREFIX = model_prefix()
 def fresh_reactor(label: str, temp_k: float, volume_fraction: float) -> dict:
     ctx: dict = {"__file__": str(MODEL_SOURCE)}
     exec(MODEL_PREFIX, ctx)
+    ctx["influent_path"] = str(ACTIVE_INFLUENT_PATH)
+    ctx["influent_state"] = active_influent_state()
+    ctx["t"] = ctx["influent_state"]["time"]
+    ctx["setInfluent"](0)
     ctx["label"] = label
     ctx["solvermethod"] = SOLVER
     ctx["C_NAOH"] = C_NAOH
