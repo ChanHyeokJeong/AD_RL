@@ -42,6 +42,24 @@ Fit quality:
 
 `theta = 0` means delay was not identifiable above the 15 min simulation/logging resolution, not that the real process has no physical delay.
 
+## Key figures
+
+### PRBS tracking, 0-40 d
+
+![PRBS tracking, 0-40 d](figures/serial_2stage_PRBS_acid_base_tracking_0_40d.png)
+
+### PRBS tracking, full 280 d
+
+![PRBS tracking, 280 d](figures/serial_2stage_PRBS_acid_base_tracking_280d.png)
+
+### FOPTD fit, 2-40 d
+
+![FOPTD fit, 2-40 d](figures/serial_2stage_PRBS_acid_base_foptd_fit_0_40d.png)
+
+### Identified step responses
+
+![FOPTD step response](figures/serial_2stage_PRBS_acid_base_foptd_step_response.png)
+
 ## Contents
 
 - `code/`
