@@ -167,6 +167,54 @@ Detailed outputs:
 
 ![7 d methane-reward chem0p2 PPO fixed pH 7 PI rollout](figures/ppo_7d_100ep_methane_reward_chem0p2_fixed_pH7_PI_rollout.png)
 
+## 7 d / 1000 episode DQN methane-reward comparison, chemical weight 0.2
+
+This run uses the same setup as the 100-episode DQN check, but extends training to 1000 episodes.
+
+```powershell
+python .\experiments\pH_control_2stage_rl_dqn_20260730\code\train_dqn_4actuator.py --episodes 1000 --episode-days 7.0 --run-name ph2stage_dqn_7d_1000ep_methane_reward_chem0p2_compare_full
+```
+
+| Policy | Reward | Raw reward | Chemical use |
+| --- | ---: | ---: | ---: |
+| DQN deterministic after 1000 episodes | 83.5893 | 8358.9296 | 526.705 kmol |
+| Best fixed dosing open-loop | 77.0218 | 7702.1781 | 52.500 kmol |
+| Zero dosing open-loop | 73.3706 | 7337.0637 | 0.000 kmol |
+| Fixed pH 7 PI, both stages | 29.6599 | 2965.9902 | 5006.192 kmol |
+
+Compared with the 100-episode DQN result, 1000 episodes improved deterministic reward from 79.4787 to 83.5893 and reduced chemical use from 666.988 kmol to 526.705 kmol. It now clearly beats the best fixed dosing baseline, but it still uses about 10 times more chemical than that fixed action.
+
+The deterministic 1000-episode DQN policy is not a fixed action. Its 56 decision steps used these dominant actions:
+
+```text
+action 21: 23 steps, Stage 1 NaOH 0.3 m3/d, Stage 2 HCl 5.0 m3/d
+action 01: 20 steps, Stage 1 HCl 0.6 m3/d, Stage 2 HCl 5.0 m3/d
+action 17:  6 steps, Stage 1 NaOH 0.1 m3/d, Stage 2 no dosing
+```
+
+Interpretation: longer DQN training finds a dynamic dosing sequence that increases methane reward and reduces pH violation relative to the fixed dosing policy. The remaining issue is chemical economy; the reward may still need a stronger or nonlinear chemical penalty if the practical target is closer to the fixed-dosing chemical budget.
+
+Detailed outputs:
+
+- `results/dqn_7d_1000ep_methane_reward_chem0p2_comparison_summary.csv`
+- `results/dqn_7d_1000ep_methane_reward_chem0p2_baseline_fixed_action_summary.csv`
+- `results/dqn_7d_1000ep_methane_reward_chem0p2_episode_summary.csv`
+- `results/dqn_7d_1000ep_methane_reward_chem0p2_policy_decision_steps.csv`
+- `results/dqn_7d_1000ep_methane_reward_chem0p2_fixed_pH7_PI_decision_steps.csv`
+- `results/dqn_7d_1000ep_methane_reward_chem0p2_policy_summary.json`
+
+### 7 d methane-reward chem0p2 DQN 1000 rollout
+
+![7 d methane-reward chem0p2 DQN 1000 rollout](figures/dqn_7d_1000ep_methane_reward_chem0p2_policy_rollout.png)
+
+### 7 d methane-reward chem0p2 DQN 1000 best fixed dosing rollout
+
+![7 d methane-reward chem0p2 DQN 1000 best fixed dosing rollout](figures/dqn_7d_1000ep_methane_reward_chem0p2_baseline_best_action_rollout.png)
+
+### 7 d methane-reward chem0p2 DQN 1000 fixed pH 7 PI rollout
+
+![7 d methane-reward chem0p2 DQN 1000 fixed pH 7 PI rollout](figures/dqn_7d_1000ep_methane_reward_chem0p2_fixed_pH7_PI_rollout.png)
+
 ## 7 d / 100 episode methane-reward comparison, chemical weight 0.2
 
 This run uses a 7 d horizon, 100 DQN training episodes, the full 25-action fixed dosing grid, the fixed pH 7 PI baseline, the default `methane_total` reward, and `chemical_kmol_weight = 0.2`.
