@@ -198,6 +198,40 @@ class TwoStagePHDirectDosingPlant:
             raise RuntimeError("Plant must be reset before simulation.")
 
         action_row = self._apply_action_to_reactors(action)
+        return self._simulate_interval(int(action), action_row)
+
+    def simulate_fixed_pH_interval(
+        self,
+        stage1_pH_sp: float = 7.0,
+        stage2_pH_sp: float = 7.0,
+    ) -> dict[str, float]:
+        if self.stage1 is None or self.stage2 is None:
+            raise RuntimeError("Plant must be reset before simulation.")
+
+        dt_d = min(
+            float(self.config.decision_interval_h) / 24.0,
+            max(0.0, self.episode_end_d - self.current_time_d),
+        )
+        self.stage1["PI_pH_controller"](float(stage1_pH_sp), float(self.stage1["pH"]), dt_d)
+        self.stage2["PI_pH_controller"](float(stage2_pH_sp), float(self.stage2["pH"]), dt_d)
+        action_row = {
+            "action": -1,
+            "stage1_signed_m3_d": float(self.stage1["q_NaOH"]) - float(self.stage1["q_HCl"]),
+            "stage2_signed_m3_d": float(self.stage2["q_NaOH"]) - float(self.stage2["q_HCl"]),
+            "stage1_q_NaOH_m3_d": float(self.stage1["q_NaOH"]),
+            "stage1_q_HCl_m3_d": float(self.stage1["q_HCl"]),
+            "stage2_q_NaOH_m3_d": float(self.stage2["q_NaOH"]),
+            "stage2_q_HCl_m3_d": float(self.stage2["q_HCl"]),
+            "stage1_pH_sp": float(stage1_pH_sp),
+            "stage2_pH_sp": float(stage2_pH_sp),
+        }
+        self.current_action = -1
+        return self._simulate_interval(-1, action_row)
+
+    def _simulate_interval(self, action: int, action_row: dict) -> dict[str, float]:
+        if self.stage1 is None or self.stage2 is None:
+            raise RuntimeError("Plant must be reset before simulation.")
+
         totals = self._empty_totals()
         self.last_step_log = []
 
@@ -316,6 +350,20 @@ class TwoStagePHDirectDosingPlant:
                 "time_d": self.current_time_d,
                 "episode_elapsed_d": self.current_time_d - self.episode_start_d,
                 "action": int(action),
+                "stage1_signed_m3_d": float(
+                    action_row.get(
+                        "stage1_signed_m3_d",
+                        float(self.stage1["q_NaOH"]) - float(self.stage1["q_HCl"]),
+                    )
+                ),
+                "stage2_signed_m3_d": float(
+                    action_row.get(
+                        "stage2_signed_m3_d",
+                        float(self.stage2["q_NaOH"]) - float(self.stage2["q_HCl"]),
+                    )
+                ),
+                "stage1_pH_sp": float(action_row.get("stage1_pH_sp", np.nan)),
+                "stage2_pH_sp": float(action_row.get("stage2_pH_sp", np.nan)),
                 "stage1_pH": float(self.stage1["pH"]),
                 "stage2_pH": float(self.stage2["pH"]),
                 "stage1_vfa_kgCOD_m3": vfa_total(self.stage1),
@@ -465,6 +513,40 @@ def rollout_policy(
     decision_df = pd.DataFrame(decision_rows)
     internal_df = pd.DataFrame(internal_rows)
     summary = summarize_decisions(decision_df)
+    return decision_df, internal_df, summary
+
+
+def rollout_fixed_pH_policy(
+    config: PHControlRLConfig,
+    stage1_pH_sp: float = 7.0,
+    stage2_pH_sp: float = 7.0,
+) -> tuple[pd.DataFrame, pd.DataFrame, dict[str, float]]:
+    env = TwoStagePHDirectDosingEnv(config)
+    env.reset(seed=config.random_seed)
+    done = False
+    decision_rows: list[dict] = []
+    internal_rows: list[dict] = []
+    step = 0
+
+    while not done:
+        info = env.plant.simulate_fixed_pH_interval(
+            stage1_pH_sp=stage1_pH_sp,
+            stage2_pH_sp=stage2_pH_sp,
+        )
+        reward = float(info["reward"])
+        row = {"decision_step": step, "reward": reward}
+        row.update(info)
+        decision_rows.append(row)
+        for internal in env.plant.last_step_log:
+            internal_rows.append(dict(internal, decision_step=step))
+        done = env.plant.current_time_d >= env.plant.episode_end_d - 1e-12
+        step += 1
+
+    decision_df = pd.DataFrame(decision_rows)
+    internal_df = pd.DataFrame(internal_rows)
+    summary = summarize_decisions(decision_df)
+    summary["stage1_pH_sp"] = float(stage1_pH_sp)
+    summary["stage2_pH_sp"] = float(stage2_pH_sp)
     return decision_df, internal_df, summary
 
 

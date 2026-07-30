@@ -56,11 +56,20 @@ These are starting values for exploration, not final process limits.
 
 ## Baseline comparison
 
-The fixed open-loop baseline is implemented as a static dosing action:
+Two baseline families are implemented.
+
+The fixed dosing open-loop baseline is implemented as a static dosing action:
 
 - The same action from the 25-action table is applied every decision interval.
 - A grid evaluation checks all fixed actions and reports the best fixed open-loop policy.
 - DQN is compared against that best fixed action and the zero-dosing action.
+
+The fixed pH 7 SP baseline is implemented as feedback PI control:
+
+- Stage 1 pH SP = 7.0.
+- Stage 2 pH SP = 7.0.
+- The reactor-specific NaOH/HCl PI gains from the FOPTD tuning package are used.
+- Both stages may dose acid/base, but each stage PI chooses only one direction at a time.
 
 ## Run
 
@@ -93,9 +102,56 @@ Important files:
 - `dqn_policy_decision_steps.csv`
 - `dqn_policy_internal_timeseries.csv`
 - `baseline_fixed_action_summary.csv`
+- `baseline_fixed_pH7_PI_decision_steps.csv`
 - `comparison_summary.csv`
 - `dqn_policy_rollout.png`
 - `baseline_best_action_rollout.png`
+- `baseline_fixed_pH7_PI_rollout.png`
+
+## 7 d / 100 episode comparison
+
+This run uses a 7 d horizon, 100 DQN training episodes, the full 25-action fixed dosing grid, and the fixed pH 7 PI baseline.
+
+```powershell
+python .\experiments\pH_control_2stage_rl_dqn_20260730\code\train_dqn_4actuator.py --episodes 100 --episode-days 7.0 --run-name ph2stage_dqn_7d_100ep_compare
+```
+
+| Policy | Reward | Raw reward | Chemical use |
+| --- | ---: | ---: | ---: |
+| DQN deterministic after 100 episodes | 80.5805 | 8058.0547 | 544.160 kmol |
+| Best fixed dosing open-loop | 106.3714 | 10637.1429 | 47.460 kmol |
+| Zero dosing open-loop | 94.1400 | 9413.9970 | 0.000 kmol |
+| Fixed pH 7 PI, both stages | 87.6819 | 8768.1856 | 5006.192 kmol |
+
+Best fixed dosing action in this 7 d check:
+
+```text
+action = 2
+Stage 1: HCl 0.6 m3/d
+Stage 2: no dosing
+```
+
+Interpretation: under the current reward weights and action grid, the 100-episode DQN has not yet beaten the best fixed dosing baseline. The fixed pH 7 PI baseline controls pH using much more chemical, so its reward is lower than zero dosing despite active feedback.
+
+Detailed outputs:
+
+- `results/dqn_7d_100ep_comparison_summary.csv`
+- `results/dqn_7d_100ep_baseline_fixed_action_summary.csv`
+- `results/dqn_7d_100ep_episode_summary.csv`
+- `results/dqn_7d_100ep_policy_decision_steps.csv`
+- `results/dqn_7d_100ep_fixed_pH7_PI_decision_steps.csv`
+
+### 7 d DQN rollout
+
+![7 d DQN rollout](figures/dqn_7d_100ep_policy_rollout.png)
+
+### 7 d best fixed dosing rollout
+
+![7 d best fixed dosing rollout](figures/dqn_7d_100ep_baseline_best_action_rollout.png)
+
+### 7 d fixed pH 7 PI rollout
+
+![7 d fixed pH 7 PI rollout](figures/dqn_7d_100ep_fixed_pH7_PI_rollout.png)
 
 ## 1 d pipeline check
 
@@ -106,6 +162,7 @@ A short 3-episode, 1 d run was executed only to verify the full pipeline. This i
 | DQN deterministic after 3 smoke episodes | -2.7227 | -272.2674 | 174.375 kmol | 0.7885 | 7.6110 |
 | Best fixed open-loop action | 0.1222 | 12.2150 | 63.280 kmol | 0.8822 | 13.3937 |
 | Zero dosing open-loop | -0.1096 | -10.9575 | 0.000 kmol | 0.8782 | 11.9930 |
+| Fixed pH 7 PI, both stages | 0.2652 | 26.5182 | 83.306 kmol | not shown | not shown |
 
 Best fixed open-loop action in this 1 d check:
 

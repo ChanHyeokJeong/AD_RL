@@ -32,6 +32,7 @@ from ph2stage_rl_env import (
     PHControlRLConfig,
     TwoStagePHDirectDosingEnv,
     config_to_json_dict,
+    rollout_fixed_pH_policy,
     rollout_policy,
 )
 
@@ -243,7 +244,37 @@ def evaluate_fixed_open_loop_baselines(
     return baseline_df
 
 
-def build_comparison(output_dir: Path, dqn_summary: dict, baseline_df: pd.DataFrame) -> pd.DataFrame:
+def evaluate_fixed_pH7_baseline(config: PHControlRLConfig, output_dir: Path) -> dict:
+    decision_df, internal_df, summary = rollout_fixed_pH_policy(
+        config,
+        stage1_pH_sp=7.0,
+        stage2_pH_sp=7.0,
+    )
+    decision_df.to_csv(output_dir / "baseline_fixed_pH7_PI_decision_steps.csv", index=False)
+    internal_df.to_csv(output_dir / "baseline_fixed_pH7_PI_internal_timeseries.csv", index=False)
+    summary = dict(policy="fixed_pH7_PI_both_stages", **summary)
+    json_dump(output_dir / "baseline_fixed_pH7_PI_summary.json", summary)
+    plot_rollout(
+        output_dir,
+        internal_df,
+        "Fixed pH 7 PI baseline, both stages",
+        "baseline_fixed_pH7_PI_rollout.png",
+    )
+    print(
+        "fixed pH7 PI "
+        f"reward={summary.get('total_reward', np.nan):.3f} "
+        f"chem={summary.get('total_chemical_kmol', np.nan):.3f}",
+        flush=True,
+    )
+    return summary
+
+
+def build_comparison(
+    output_dir: Path,
+    dqn_summary: dict,
+    baseline_df: pd.DataFrame,
+    fixed_pH7_summary: dict | None = None,
+) -> pd.DataFrame:
     rows = [dqn_summary]
     if not baseline_df.empty:
         best = baseline_df.loc[baseline_df["total_reward"].idxmax()].to_dict()
@@ -257,6 +288,8 @@ def build_comparison(output_dir: Path, dqn_summary: dict, baseline_df: pd.DataFr
             hold = hold_rows.iloc[0].to_dict()
             hold["policy"] = "zero_dosing_open_loop"
             rows.append(hold)
+    if fixed_pH7_summary is not None:
+        rows.append(fixed_pH7_summary)
     comparison = pd.DataFrame(rows)
     comparison.to_csv(output_dir / "comparison_summary.csv", index=False)
     return comparison
@@ -311,6 +344,7 @@ def main() -> None:
     parser.add_argument("--chemical-kmol-weight", type=float, default=0.03)
     parser.add_argument("--ph-violation-weight", type=float, default=500.0)
     parser.add_argument("--skip-baselines", action="store_true")
+    parser.add_argument("--skip-ph7-baseline", action="store_true")
     parser.add_argument("--baseline-max-actions", type=int, default=None)
     args = parser.parse_args()
 
@@ -337,8 +371,15 @@ def main() -> None:
             output_dir,
             max_actions=args.baseline_max_actions,
         )
-        comparison = build_comparison(output_dir, dqn_summary, baseline_df)
-        print(comparison[["policy", "total_reward", "total_reward_raw", "total_chemical_kmol"]].to_string(index=False))
+        fixed_pH7_summary = None
+        if not args.skip_ph7_baseline:
+            fixed_pH7_summary = evaluate_fixed_pH7_baseline(config, output_dir)
+        comparison = build_comparison(output_dir, dqn_summary, baseline_df, fixed_pH7_summary)
+        print(
+            comparison[
+                ["policy", "total_reward", "total_reward_raw", "total_chemical_kmol"]
+            ].to_string(index=False)
+        )
 
     print(f"saved: {output_dir}", flush=True)
 
