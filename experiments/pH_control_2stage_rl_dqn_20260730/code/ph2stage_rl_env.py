@@ -34,7 +34,7 @@ class PHControlRLConfig:
     stage2_methane_weight: float = 0.1
     reward_mode: str = "methane_total"
     methane_reward_weight: float = 1.0
-    chemical_kmol_weight: float = 0.03
+    chemical_kmol_weight: float = 0.2
     ph_violation_weight: float = 500.0
 
     stage1_pH_min: float = 4.8

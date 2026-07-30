@@ -347,7 +347,7 @@ def main() -> None:
     )
     parser.add_argument("--methane-reward-weight", type=float, default=1.0)
     parser.add_argument("--reward-scale", type=float, default=100.0)
-    parser.add_argument("--chemical-kmol-weight", type=float, default=0.03)
+    parser.add_argument("--chemical-kmol-weight", type=float, default=0.2)
     parser.add_argument("--ph-violation-weight", type=float, default=500.0)
     parser.add_argument("--skip-baselines", action="store_true")
     parser.add_argument("--skip-ph7-baseline", action="store_true")
