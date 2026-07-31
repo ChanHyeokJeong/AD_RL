@@ -67,6 +67,8 @@ def train_dqn(
     output_dir: Path,
     episodes: int,
     init_model: str | None = None,
+    initial_global_step: int | None = None,
+    initial_completed_episodes: int | None = None,
 ) -> tuple[QNetwork, pd.DataFrame, pd.DataFrame]:
     random.seed(config.random_seed)
     np.random.seed(config.random_seed)
@@ -78,17 +80,34 @@ def train_dqn(
     q_net = QNetwork(obs_dim, action_dim)
     target_net = QNetwork(obs_dim, action_dim)
     target_net.load_state_dict(q_net.state_dict())
+    optimizer_state = None
+    global_step = 0
+    completed_episodes = 0
     if init_model:
         init_path = Path(init_model)
         state = torch.load(init_path, map_location="cpu")
         if isinstance(state, dict) and "q_network_state_dict" in state:
-            state = state["q_network_state_dict"]
+            q_net.load_state_dict(state["q_network_state_dict"])
+            target_net.load_state_dict(
+                state.get("target_network_state_dict", state["q_network_state_dict"])
+            )
+            optimizer_state = state.get("optimizer_state_dict")
+            global_step = int(state.get("global_step", 0))
+            completed_episodes = int(state.get("completed_episodes", 0))
         elif isinstance(state, dict) and "network_state_dict" in state:
-            state = state["network_state_dict"]
-        q_net.load_state_dict(state)
-        target_net.load_state_dict(q_net.state_dict())
+            q_net.load_state_dict(state["network_state_dict"])
+            target_net.load_state_dict(q_net.state_dict())
+        else:
+            q_net.load_state_dict(state)
+            target_net.load_state_dict(q_net.state_dict())
         print(f"loaded DQN init model: {init_path}", flush=True)
     optimizer = torch.optim.Adam(q_net.parameters(), lr=config.learning_rate)
+    if optimizer_state is not None:
+        optimizer.load_state_dict(optimizer_state)
+    if initial_global_step is not None:
+        global_step = int(initial_global_step)
+    if initial_completed_episodes is not None:
+        completed_episodes = int(initial_completed_episodes)
     replay = ReplayBuffer(config.replay_capacity)
 
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -97,11 +116,11 @@ def train_dqn(
 
     training_rows: list[dict] = []
     summary_rows: list[dict] = []
-    global_step = 0
     run_t0 = time.time()
 
     for ep in range(int(episodes)):
-        obs = env.reset(seed=config.random_seed + ep)
+        episode_index = completed_episodes + ep
+        obs = env.reset(seed=config.random_seed + episode_index)
         done = False
         ep_rows_start = len(training_rows)
         ep_t0 = time.time()
@@ -135,7 +154,7 @@ def train_dqn(
                 target_net.load_state_dict(q_net.state_dict())
 
             row = {
-                "episode": ep,
+                "episode": episode_index,
                 "episode_step": ep_step,
                 "global_step": global_step,
                 "epsilon": eps,
@@ -151,7 +170,7 @@ def train_dqn(
 
         ep_df = pd.DataFrame(training_rows[ep_rows_start:])
         summary = {
-            "episode": ep,
+            "episode": episode_index,
             "steps": int(len(ep_df)),
             "global_step_end": int(global_step),
             "episode_time_s": time.time() - ep_t0,
@@ -184,7 +203,16 @@ def train_dqn(
 
         save_csv(training_rows, output_dir / "training_steps.csv")
         save_csv(summary_rows, output_dir / "episode_summary.csv")
-        torch.save(q_net.state_dict(), output_dir / "checkpoint_latest.pt")
+        torch.save(
+            {
+                "q_network_state_dict": q_net.state_dict(),
+                "target_network_state_dict": target_net.state_dict(),
+                "optimizer_state_dict": optimizer.state_dict(),
+                "global_step": int(global_step),
+                "completed_episodes": int(episode_index + 1),
+            },
+            output_dir / "checkpoint_latest.pt",
+        )
         print(
             f"episode {ep + 1:03d}/{episodes} "
             f"reward={summary.get('total_reward', np.nan):.3f} "
@@ -356,6 +384,8 @@ def main() -> None:
     parser.add_argument("--decision-interval-h", type=float, default=1.0)
     parser.add_argument("--run-name", default="ph2stage_dqn_4actuator_smoke")
     parser.add_argument("--init-model", default=None)
+    parser.add_argument("--initial-global-step", type=int, default=None)
+    parser.add_argument("--initial-completed-episodes", type=int, default=None)
     parser.add_argument("--learning-rate", type=float, default=5e-4)
     parser.add_argument(
         "--reward-mode",
@@ -414,6 +444,8 @@ def main() -> None:
         output_dir,
         episodes=args.episodes,
         init_model=args.init_model,
+        initial_global_step=args.initial_global_step,
+        initial_completed_episodes=args.initial_completed_episodes,
     )
     dqn_summary = evaluate_dqn_policy(config, q_net, output_dir)
 

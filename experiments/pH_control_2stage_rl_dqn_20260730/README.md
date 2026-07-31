@@ -24,6 +24,13 @@ python .\experiments\pH_control_2stage_rl_dqn_20260730\code\train_dqn_4actuator.
   --reward-mode active_biomass --use-temperature-kinetics
 ```
 
+The staged 1 d DQN test was subsequently extended through 600 cumulative
+episodes. The best deterministic policy occurred at episode 500 (reward
+16.8848), exceeding the best fixed open-loop reward (16.3576). Episode 600
+retained biomass slightly better but scored 16.1783, so the ep500 checkpoint is
+kept as the best policy and ep600 as the continuation head. See
+`results/biomass_reward_dqn_1d_staged_comparison.csv`.
+
 Date: 2026-07-30
 
 This experiment starts the RL formulation for the 2-stage ADM1 pH-control problem:
