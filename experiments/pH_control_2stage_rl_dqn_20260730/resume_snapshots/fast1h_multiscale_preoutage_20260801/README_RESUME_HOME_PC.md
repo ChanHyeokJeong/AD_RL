@@ -14,6 +14,15 @@ It contains the lightweight files needed to resume or evaluate the current 2-sta
 
 The full `runs/` directories and large `training_steps.csv` files are intentionally not included.
 
+## Snapshot status
+
+The school-PC runs were stopped after the latest saved checkpoints were copied and verified.
+
+```text
+DQN latest checkpoint: episode 926 completed, best stochastic training reward = 113.128
+PPO latest checkpoint: episode 906 completed, best stochastic training reward = 107.191
+```
+
 ## Resume DQN from latest checkpoint
 
 ```powershell
