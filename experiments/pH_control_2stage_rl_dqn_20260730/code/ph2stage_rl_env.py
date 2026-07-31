@@ -20,11 +20,13 @@ FERMENTABLE_NAMES = ["S_su", "S_aa", "S_fa", "X_ch", "X_pr", "X_li"]
 @dataclass
 class PHControlRLConfig:
     episode_days: float = 2.0
-    decision_interval_h: float = 3.0
+    decision_interval_h: float = 1.0
     reward_scale: float = 100.0
     random_seed: int = 20260730
     influent_csv: str = "digester_influent_mean_full.csv"
     use_dynamic_flow: bool = False
+    temperature_parameter_csv: str = "adm1_temperature_parameters_long.csv"
+    use_temperature_kinetics: bool = False
     episode_start_mode: str = "fixed"
     episode_start_day: float = 0.0
     episode_start_day_min: float = 0.0
@@ -32,8 +34,8 @@ class PHControlRLConfig:
 
     # Signed flow convention: negative = HCl, positive = NaOH, unit = m3/d.
     # The table forbids simultaneous acid/base dosing within the same reactor.
-    stage1_signed_flow_levels_m3_d: tuple[float, ...] = (-0.60, -0.20, 0.0, 0.10, 0.30)
-    stage2_signed_flow_levels_m3_d: tuple[float, ...] = (-20.0, -5.0, 0.0, 5.0, 20.0)
+    stage1_signed_flow_levels_m3_d: tuple[float, ...] = (-40.0, -5.0, -1.0, 0.0, 1.0, 5.0, 35.0)
+    stage2_signed_flow_levels_m3_d: tuple[float, ...] = (-100.0, -10.0, -2.0, 0.0, 2.0, 10.0, 50.0)
 
     stage1_vfa_production_weight: float = 1.0
     stage2_vfa_removal_weight: float = 1.0
@@ -52,11 +54,11 @@ class PHControlRLConfig:
     learning_rate: float = 5e-4
     batch_size: int = 64
     replay_capacity: int = 50_000
-    warmup_steps: int = 32
-    target_update_steps: int = 100
+    warmup_steps: int = 256
+    target_update_steps: int = 500
     epsilon_start: float = 1.0
     epsilon_end: float = 0.05
-    epsilon_decay_steps: int = 2_000
+    epsilon_decay_steps: int = 20_000
 
 
 def config_to_json_dict(config: PHControlRLConfig) -> dict:
@@ -131,6 +133,10 @@ class TwoStagePHDirectDosingPlant:
 
     def reset(self, seed: int | None = None) -> np.ndarray:
         base_model.load_influent_csv(self.config.influent_csv)
+        base_model.configure_temperature_parameter_schedule(
+            self.config.temperature_parameter_csv,
+            enabled=self.config.use_temperature_kinetics,
+        )
         self.stage1 = base_model.fresh_reactor(
             "stage1_55C",
             base_model.STAGE1_TEMP_K,
@@ -408,6 +414,8 @@ class TwoStagePHDirectDosingPlant:
                 "episode_start_index": int(self.selected_episode_start_index),
                 "influent_csv": str(self.config.influent_csv),
                 "use_dynamic_flow": bool(self.config.use_dynamic_flow),
+                "temperature_parameter_csv": str(self.config.temperature_parameter_csv),
+                "use_temperature_kinetics": bool(self.config.use_temperature_kinetics),
                 "action": int(action),
                 "stage1_signed_m3_d": float(
                     action_row.get(

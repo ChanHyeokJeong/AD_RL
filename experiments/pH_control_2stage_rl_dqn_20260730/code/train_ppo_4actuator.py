@@ -14,6 +14,7 @@ os.environ.setdefault("OMP_NUM_THREADS", "1")
 import numpy as np
 import pandas as pd
 import torch
+from torch import nn
 
 THIS_DIR = Path(__file__).resolve().parent
 REPO_ROOT = THIS_DIR.parents[2] if (THIS_DIR.parents[2] / "ad_rl").exists() else None
@@ -87,6 +88,27 @@ def summarize_episode(
     return summary
 
 
+def apply_initial_dose_prior(
+    agent: PPOAgent,
+    env: TwoStagePHDirectDosingEnv,
+    strength: float,
+) -> None:
+    if strength <= 0.0:
+        return
+    table = env.action_table.copy()
+    stage1_scale = max(1e-12, table["stage1_signed_m3_d"].abs().max())
+    stage2_scale = max(1e-12, table["stage2_signed_m3_d"].abs().max())
+    dose_distance = (
+        table["stage1_signed_m3_d"].abs().to_numpy(dtype=float) / stage1_scale
+        + table["stage2_signed_m3_d"].abs().to_numpy(dtype=float) / stage2_scale
+    )
+    logits = -float(strength) * dose_distance
+    logits = logits - float(np.max(logits))
+    with torch.no_grad():
+        nn.init.zeros_(agent.network.policy_head.weight)
+        agent.network.policy_head.bias.copy_(torch.tensor(logits, dtype=torch.float32))
+
+
 def train_ppo(
     config: PHControlRLConfig,
     output_dir: Path,
@@ -102,6 +124,8 @@ def train_ppo(
     entropy_decay_episodes: int,
     value_coef: float,
     max_grad_norm: float,
+    initial_dose_prior_strength: float,
+    init_model: str | None = None,
 ) -> tuple[PPOAgent, pd.DataFrame, pd.DataFrame]:
     random.seed(config.random_seed)
     np.random.seed(config.random_seed)
@@ -124,6 +148,17 @@ def train_ppo(
         update_epochs=int(update_epochs),
         minibatch_size=int(minibatch_size),
     )
+    apply_initial_dose_prior(agent, env, float(initial_dose_prior_strength))
+    if init_model:
+        init_path = Path(init_model)
+        state = torch.load(init_path, map_location="cpu")
+        if isinstance(state, dict) and "network_state_dict" in state:
+            agent.network.load_state_dict(state["network_state_dict"])
+            if "optimizer_state_dict" in state:
+                agent.optimizer.load_state_dict(state["optimizer_state_dict"])
+        else:
+            agent.network.load_state_dict(state)
+        print(f"loaded PPO init model: {init_path}", flush=True)
 
     output_dir.mkdir(parents=True, exist_ok=True)
     env.action_table.to_csv(output_dir / "action_table.csv", index=False)
@@ -142,6 +177,7 @@ def train_ppo(
             "entropy_decay_episodes": int(entropy_decay_episodes),
             "value_coef": float(value_coef),
             "max_grad_norm": float(max_grad_norm),
+            "initial_dose_prior_strength": float(initial_dose_prior_strength),
         },
     )
 
@@ -274,7 +310,9 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--episodes", type=int, default=5)
     parser.add_argument("--episode-days", type=float, default=2.0)
+    parser.add_argument("--decision-interval-h", type=float, default=1.0)
     parser.add_argument("--run-name", default="ph2stage_ppo_4actuator_smoke")
+    parser.add_argument("--init-model", default=None)
     parser.add_argument("--learning-rate", type=float, default=3e-4)
     parser.add_argument("--hidden-dim", type=int, default=128)
     parser.add_argument("--update-every-episodes", type=int, default=4)
@@ -287,6 +325,7 @@ def main() -> None:
     parser.add_argument("--entropy-decay-episodes", type=int, default=100)
     parser.add_argument("--value-coef", type=float, default=0.5)
     parser.add_argument("--max-grad-norm", type=float, default=0.5)
+    parser.add_argument("--initial-dose-prior-strength", type=float, default=0.0)
     parser.add_argument(
         "--reward-mode",
         choices=["methane_total", "stage2_methane", "staged_vfa_ch4"],
@@ -298,6 +337,8 @@ def main() -> None:
     parser.add_argument("--ph-violation-weight", type=float, default=500.0)
     parser.add_argument("--influent-csv", default="digester_influent_mean_full.csv")
     parser.add_argument("--use-dynamic-flow", action="store_true")
+    parser.add_argument("--temperature-parameter-csv", default="adm1_temperature_parameters_long.csv")
+    parser.add_argument("--use-temperature-kinetics", action="store_true")
     parser.add_argument(
         "--episode-start-mode",
         choices=["fixed", "random"],
@@ -314,6 +355,7 @@ def main() -> None:
     config = replace(
         PHControlRLConfig(),
         episode_days=float(args.episode_days),
+        decision_interval_h=float(args.decision_interval_h),
         learning_rate=float(args.learning_rate),
         reward_mode=str(args.reward_mode),
         methane_reward_weight=float(args.methane_reward_weight),
@@ -322,6 +364,8 @@ def main() -> None:
         ph_violation_weight=float(args.ph_violation_weight),
         influent_csv=str(args.influent_csv),
         use_dynamic_flow=bool(args.use_dynamic_flow),
+        temperature_parameter_csv=str(args.temperature_parameter_csv),
+        use_temperature_kinetics=bool(args.use_temperature_kinetics),
         episode_start_mode=str(args.episode_start_mode),
         episode_start_day=float(args.episode_start_day),
         episode_start_day_min=float(args.episode_start_day_min),
@@ -345,6 +389,8 @@ def main() -> None:
         entropy_decay_episodes=args.entropy_decay_episodes,
         value_coef=args.value_coef,
         max_grad_norm=args.max_grad_norm,
+        initial_dose_prior_strength=args.initial_dose_prior_strength,
+        init_model=args.init_model,
     )
     ppo_summary = evaluate_ppo_policy(config, agent, output_dir)
 

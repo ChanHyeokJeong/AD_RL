@@ -13,7 +13,7 @@ This directory preserves the current two-stage PyADM1 pH-control result after ch
 - Liquid volumes: Stage 1 = 1070.8044 m3, Stage 2 = 4283.2176 m3.
 - Base dosing: 25 M NaOH, represented as `S_cation` addition.
 - Acid dosing: 35 wt% HCl, approximated as 11.3 kmol/m3, represented as `S_anion` addition.
-- PI output update interval: 3 h. Model output/log interval: 15 min.
+- PI output update interval: 1 h. Model output/log interval: 15 min.
 - PRBS setpoint: pH 7.0 / 8.4 with irregular 0.5-3.0 d dwell length, seed 260714.
 
 ## Open-loop FOPTD/FORTD models
@@ -37,20 +37,29 @@ For the flow-basis model, `K` is pH/(m3/d), `tau` and `theta` are in days, and `
 
 ## Controller tuning used in code
 
-NaOH gains were moved more aggressively than the 1 d settling baseline to target about +0.1 pH initial up-step overshoot. HCl gains remain near the aggressive 1 d settling basis used before this NaOH overshoot search.
+The current code uses 1 h PI output updates. Stage 1 gains were re-tuned from the earlier 3 h setting to prioritize fast reactor-specific tracking over intentional NaOH overshoot. Stage 2 retains the previous aggressive FOPTD/IMC gains and is re-verified at the 1 h update interval.
 
-| reactor | chemical | Kp_m3_d_per_pH | Ki_m3_d_per_pH_d | active_in_current_serial_run |
+| reactor | chemical | Kp_m3_d_per_pH | Ki_m3_d_per_pH_d | active_in_stage_specific_prbs |
 | --- | --- | --- | --- | --- |
-| Stage 1 | NaOH | 25.986622 | 4.331104 | False |
-| Stage 1 | HCl | 37.858077 | 6.309680 | False |
+| Stage 1 | NaOH | 24.000000 | 4.800000 | True |
+| Stage 1 | HCl | 28.000000 | 5.600000 | True |
 | Stage 2 | NaOH | 34.039882 | 11.346627 | True |
 | Stage 2 | HCl | 123.104132 | 7.694008 | True |
 
-Current serial scripts control Stage 2 pH. Stage 1 acid/base gains are stored as code inputs for reactor-specific control experiments, but Stage 1 dosing is held at zero in the present serial PRBS run.
+The reactor-specific PRBS verification script controls the selected reactor setpoint while holding the other reactor at pH 7.0.
 
-## ITAE and tracking result
+## Reactor-specific 1 h closed-loop PRBS result
 
-ITAE is computed segment by segment as `integral(t_rel * abs(pH_sp - pH_stage2) dt)`, where `t_rel = t - segment_start`. Segment ITAE values are summed for the total score.
+The table below summarizes the 40 d reactor-specific PRBS check. Settling time is the first time after a setpoint change when the controlled reactor enters and remains inside +/-0.05 pH. The filtered values use only up/down PRBS segments with dwell time >= 1 d.
+
+| reactor | median_settle_ge1d_d | max_settle_ge1d_d | ge1d_segments_under_1d | up_max_overshoot_pH | down_max_undershoot_pH | q_NaOH_max_m3_d | q_HCl_max_m3_d | saturation_note |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Stage 1 | 0.280586 | 0.998221 | 18/18 | 0.000000 | 0.138934 | 35.348207 | 38.873879 | no saturation |
+| Stage 2 | 0.355494 | 0.664888 | 18/18 | 0.009003 | 0.000000 | 48.302000 | 100.000000 | HCl saturation fraction 0.023431 |
+
+## Previous serial Stage 2 PRBS result
+
+The files below are retained from the earlier serial Stage 2 PRBS run and are useful for comparison, but the current fast-tracking code inputs are the 1 h reactor-specific values listed above. ITAE is computed segment by segment as `integral(t_rel * abs(pH_sp - pH_stage2) dt)`, where `t_rel = t - segment_start`. Segment ITAE values are summed for the total score.
 
 | metric | value | unit |
 | --- | --- | --- |
@@ -63,7 +72,7 @@ ITAE is computed segment by segment as `integral(t_rel * abs(pH_sp - pH_stage2) 
 | median_settle_time_0p05 | 0.296126 | d |
 | max_settle_time_0p05 | 0.915160 | d |
 
-Overshoot and pump saturation summary from the latest fast-PI PRBS check:
+Overshoot and pump saturation summary from that previous serial PRBS check:
 
 | metric | value | unit |
 | --- | --- | --- |
@@ -92,6 +101,12 @@ Overshoot and pump saturation summary from the latest fast-PI PRBS check:
 ### Fast PI PRBS tracking, full 280 d
 
 ![Fast PI PRBS tracking, 280 d](figures/fast_pi_prbs_tracking_280d.png)
+
+### Reactor-specific closed-loop PRBS tracking
+
+![Stage 1 closed-loop PRBS tracking](figures/closedloop_prbs_test_stage1_tracking.png)
+
+![Stage 2 closed-loop PRBS tracking](figures/closedloop_prbs_test_stage2_tracking.png)
 
 ## Contents
 

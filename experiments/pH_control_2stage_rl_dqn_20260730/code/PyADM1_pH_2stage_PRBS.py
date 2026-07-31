@@ -22,15 +22,15 @@ GAS_TO_LIQUID_VOLUME_RATIO = 300.0 / 3400.0
 C_NAOH = 25.0  # kmol/m3
 C_HCL = 11.3  # kmol/m3, approx. 35 wt% HCl
 
-# Aggressive IMC PI tuning from 6 d / 24 d open-loop PRBS FOPTD fits.
-# Target: NaOH tuned for about +0.1 pH initial up-step overshoot, HCl about 1 d settling.
+# Fast 1 h PI tuning from 6 d / 24 d open-loop PRBS FOPTD fits and closed-loop PRBS checks.
+# Target: reactor-specific pH setpoint tracking inside about 1 d with limited overshoot.
 # Units: Kp in (m3/d)/pH, Ki in (m3/d)/(pH*d).
 CONTROL_TUNINGS = {
     "stage1_55C": {
-        "Kp_NaOH": 25.986622,
-        "Ki_NaOH": 4.331104,
-        "Kp_HCl": 37.858077,
-        "Ki_HCl": 6.309680,
+        "Kp_NaOH": 24.000000,
+        "Ki_NaOH": 4.800000,
+        "Kp_HCl": 28.000000,
+        "Ki_HCl": 5.600000,
     },
     "stage2_35C": {
         "Kp_NaOH": 34.039882,
@@ -39,7 +39,7 @@ CONTROL_TUNINGS = {
         "Ki_HCl": 7.694008,
     },
 }
-CONTROL_INTERVAL_DAYS = 3.0 / 24.0
+CONTROL_INTERVAL_DAYS = 1.0 / 24.0
 Q_NAOH_MIN = 0.0
 Q_NAOH_MAX = 100.0
 Q_HCL_MIN = 0.0
@@ -64,6 +64,22 @@ DEFAULT_INFLUENT_CSV = BASE_DIR / "digester_influent_mean_full.csv"
 ACTIVE_INFLUENT_PATH = DEFAULT_INFLUENT_CSV
 ACTIVE_INFLUENT_STATE: pd.DataFrame | None = None
 
+DEFAULT_TEMPERATURE_PARAMETER_CSV = BASE_DIR / "adm1_temperature_parameters_long.csv"
+ACTIVE_TEMPERATURE_PARAMETER_CSV = DEFAULT_TEMPERATURE_PARAMETER_CSV
+ACTIVE_TEMPERATURE_PARAMETER_TABLE: pd.DataFrame | None = None
+ACTIVE_USE_TEMPERATURE_KINETICS = False
+KINETIC_DECAY_ALIASES = {
+    "k_dec_X_i": [
+        "k_dec_X_su",
+        "k_dec_X_aa",
+        "k_dec_X_fa",
+        "k_dec_X_c4",
+        "k_dec_X_pro",
+        "k_dec_X_ac",
+        "k_dec_X_h2",
+    ],
+}
+
 
 def resolve_influent_csv(path: str | Path | None = None) -> Path:
     if path is None or str(path) == "":
@@ -85,6 +101,70 @@ def load_influent_csv(path: str | Path | None = None) -> pd.DataFrame:
 
 def active_influent_state() -> pd.DataFrame:
     return load_influent_csv(ACTIVE_INFLUENT_PATH)
+
+
+def resolve_temperature_parameter_csv(path: str | Path | None = None) -> Path:
+    if path is None or str(path) == "":
+        return DEFAULT_TEMPERATURE_PARAMETER_CSV
+    csv_path = Path(path)
+    if not csv_path.is_absolute():
+        csv_path = BASE_DIR / csv_path
+    return csv_path
+
+
+def configure_temperature_parameter_schedule(
+    path: str | Path | None = None,
+    enabled: bool = False,
+) -> None:
+    global ACTIVE_USE_TEMPERATURE_KINETICS
+    ACTIVE_USE_TEMPERATURE_KINETICS = bool(enabled)
+    if ACTIVE_USE_TEMPERATURE_KINETICS:
+        load_temperature_parameter_table(path)
+
+
+def load_temperature_parameter_table(path: str | Path | None = None) -> pd.DataFrame:
+    global ACTIVE_TEMPERATURE_PARAMETER_CSV, ACTIVE_TEMPERATURE_PARAMETER_TABLE
+    csv_path = resolve_temperature_parameter_csv(path)
+    if ACTIVE_TEMPERATURE_PARAMETER_TABLE is None or csv_path != ACTIVE_TEMPERATURE_PARAMETER_CSV:
+        ACTIVE_TEMPERATURE_PARAMETER_CSV = csv_path
+        table = pd.read_csv(csv_path)
+        table["temperature_C"] = pd.to_numeric(table["temperature_C"], errors="coerce")
+        table["value"] = pd.to_numeric(table["value"], errors="coerce")
+        ACTIVE_TEMPERATURE_PARAMETER_TABLE = table.dropna(subset=["temperature_C", "value"])
+    return ACTIVE_TEMPERATURE_PARAMETER_TABLE
+
+
+def temperature_parameter_values(temp_c: float) -> dict[str, float]:
+    table = load_temperature_parameter_table(ACTIVE_TEMPERATURE_PARAMETER_CSV)
+    exact = table[np.isclose(table["temperature_C"], float(temp_c), atol=1e-9)]
+    if not exact.empty:
+        return {
+            str(row["parameter"]): float(row["value"])
+            for _, row in exact.iterrows()
+        }
+
+    values = {}
+    for parameter, group in table.groupby("parameter"):
+        group = group.sort_values("temperature_C")
+        values[str(parameter)] = float(
+            np.interp(
+                float(temp_c),
+                group["temperature_C"].to_numpy(dtype=float),
+                group["value"].to_numpy(dtype=float),
+            )
+        )
+    return values
+
+
+def apply_temperature_parameters(ctx: dict, temp_c: float) -> dict[str, float]:
+    applied = {}
+    for parameter, value in temperature_parameter_values(temp_c).items():
+        targets = KINETIC_DECAY_ALIASES.get(parameter, [parameter])
+        for target in targets:
+            if target in ctx:
+                ctx[target] = float(value)
+                applied[target] = float(value)
+    return applied
 
 
 def model_prefix() -> str:
@@ -128,6 +208,14 @@ def fresh_reactor(label: str, temp_k: float, volume_fraction: float) -> dict:
 
     configure_volume(ctx, volume_fraction)
     configure_temperature(ctx, temp_k)
+    ctx["temperature_kinetics_enabled"] = bool(ACTIVE_USE_TEMPERATURE_KINETICS)
+    ctx["temperature_parameter_csv"] = str(ACTIVE_TEMPERATURE_PARAMETER_CSV)
+    ctx["applied_temperature_parameters"] = {}
+    if ACTIVE_USE_TEMPERATURE_KINETICS:
+        ctx["applied_temperature_parameters"] = apply_temperature_parameters(
+            ctx,
+            float(temp_k) - 273.15,
+        )
     refresh_state_input(ctx)
     ctx["DAESolve"]()
     sync_equilibrium_derived(ctx)

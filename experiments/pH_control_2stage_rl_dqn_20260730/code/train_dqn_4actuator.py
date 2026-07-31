@@ -66,6 +66,7 @@ def train_dqn(
     config: PHControlRLConfig,
     output_dir: Path,
     episodes: int,
+    init_model: str | None = None,
 ) -> tuple[QNetwork, pd.DataFrame, pd.DataFrame]:
     random.seed(config.random_seed)
     np.random.seed(config.random_seed)
@@ -77,6 +78,16 @@ def train_dqn(
     q_net = QNetwork(obs_dim, action_dim)
     target_net = QNetwork(obs_dim, action_dim)
     target_net.load_state_dict(q_net.state_dict())
+    if init_model:
+        init_path = Path(init_model)
+        state = torch.load(init_path, map_location="cpu")
+        if isinstance(state, dict) and "q_network_state_dict" in state:
+            state = state["q_network_state_dict"]
+        elif isinstance(state, dict) and "network_state_dict" in state:
+            state = state["network_state_dict"]
+        q_net.load_state_dict(state)
+        target_net.load_state_dict(q_net.state_dict())
+        print(f"loaded DQN init model: {init_path}", flush=True)
     optimizer = torch.optim.Adam(q_net.parameters(), lr=config.learning_rate)
     replay = ReplayBuffer(config.replay_capacity)
 
@@ -338,7 +349,9 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--episodes", type=int, default=5)
     parser.add_argument("--episode-days", type=float, default=2.0)
+    parser.add_argument("--decision-interval-h", type=float, default=1.0)
     parser.add_argument("--run-name", default="ph2stage_dqn_4actuator_smoke")
+    parser.add_argument("--init-model", default=None)
     parser.add_argument("--learning-rate", type=float, default=5e-4)
     parser.add_argument(
         "--reward-mode",
@@ -351,6 +364,8 @@ def main() -> None:
     parser.add_argument("--ph-violation-weight", type=float, default=500.0)
     parser.add_argument("--influent-csv", default="digester_influent_mean_full.csv")
     parser.add_argument("--use-dynamic-flow", action="store_true")
+    parser.add_argument("--temperature-parameter-csv", default="adm1_temperature_parameters_long.csv")
+    parser.add_argument("--use-temperature-kinetics", action="store_true")
     parser.add_argument(
         "--episode-start-mode",
         choices=["fixed", "random"],
@@ -367,6 +382,7 @@ def main() -> None:
     config = replace(
         PHControlRLConfig(),
         episode_days=float(args.episode_days),
+        decision_interval_h=float(args.decision_interval_h),
         learning_rate=float(args.learning_rate),
         reward_mode=str(args.reward_mode),
         methane_reward_weight=float(args.methane_reward_weight),
@@ -375,6 +391,8 @@ def main() -> None:
         ph_violation_weight=float(args.ph_violation_weight),
         influent_csv=str(args.influent_csv),
         use_dynamic_flow=bool(args.use_dynamic_flow),
+        temperature_parameter_csv=str(args.temperature_parameter_csv),
+        use_temperature_kinetics=bool(args.use_temperature_kinetics),
         episode_start_mode=str(args.episode_start_mode),
         episode_start_day=float(args.episode_start_day),
         episode_start_day_min=float(args.episode_start_day_min),
@@ -383,7 +401,12 @@ def main() -> None:
     output_dir = output_base_dir() / args.run_name
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    q_net, _training, _summary = train_dqn(config, output_dir, episodes=args.episodes)
+    q_net, _training, _summary = train_dqn(
+        config,
+        output_dir,
+        episodes=args.episodes,
+        init_model=args.init_model,
+    )
     dqn_summary = evaluate_dqn_policy(config, q_net, output_dir)
 
     if args.skip_baselines:

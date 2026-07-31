@@ -1,5 +1,5 @@
-reactor,reactor_code,temperature_C,active_in_current_serial_run,chemical,Kp_m3_d_per_pH,Ki_m3_d_per_pH_d,FOPTD_gain_pH_per_m3_d,FOPTD_gain_pH_per_kmol_d,FOPTD_tau_d,FOPTD_theta_d,tuning_basis
-Stage 1,stage1_55C,55.0,False,NaOH,25.986622,4.331104,1.477683395949052,0.059107335837962,6.0,0.0,NaOH multiplier 1.60 for about +0.1 pH up-step overshoot; HCl retained near 1 d settling aggressive IMC basis.
-Stage 1,stage1_55C,55.0,False,HCl,37.858077,6.30968,-0.633946613726224,-0.0561014702412587,6.0,0.0,NaOH multiplier 1.60 for about +0.1 pH up-step overshoot; HCl retained near 1 d settling aggressive IMC basis.
-Stage 2,stage2_35C,35.0,True,NaOH,34.039882,11.346627,0.564044263715911,0.0225617705486364,3.0,0.0,NaOH multiplier 1.60 for about +0.1 pH up-step overshoot; HCl retained near 1 d settling aggressive IMC basis.
-Stage 2,stage2_35C,35.0,True,HCl,123.104132,7.694008,-0.5198850697257467,-0.0460075282943138,16.0,0.0,NaOH multiplier 1.60 for about +0.1 pH up-step overshoot; HCl retained near 1 d settling aggressive IMC basis.
+reactor,reactor_code,temperature_C,active_in_stage_specific_prbs,chemical,Kp_m3_d_per_pH,Ki_m3_d_per_pH_d,FOPTD_gain_pH_per_m3_d,FOPTD_gain_pH_per_kmol_d,FOPTD_tau_d,FOPTD_theta_d,tuning_basis
+Stage 1,stage1_55C,55.0,True,NaOH,24.0,4.8,1.477683395949052,0.059107335837962,6.0,0.0,1 h closed-loop PRBS fast-tracking tuning; 40 d stage-specific check settles all >=1 d dwell segments within 1 d.
+Stage 1,stage1_55C,55.0,True,HCl,28.0,5.6,-0.633946613726224,-0.0561014702412587,6.0,0.0,1 h closed-loop PRBS fast-tracking tuning; 40 d stage-specific check settles all >=1 d dwell segments within 1 d.
+Stage 2,stage2_35C,35.0,True,NaOH,34.039882,11.346627,0.564044263715911,0.0225617705486364,3.0,0.0,1 h control interval with previous aggressive FOPTD/IMC gain; verified by 40 d stage-specific PRBS.
+Stage 2,stage2_35C,35.0,True,HCl,123.104132,7.694008,-0.5198850697257467,-0.0460075282943138,16.0,0.0,1 h control interval with previous aggressive FOPTD/IMC gain; verified by 40 d stage-specific PRBS.

@@ -17,7 +17,7 @@ dosing,C_NAOH,25.0,kmol/m3,C_NAOH,PyADM1_pH_2stage_PRBS.py,25 M NaOH basis.
 dosing,C_HCL,11.3,kmol/m3,C_HCL,PyADM1_pH_2stage_PRBS.py,35 wt% HCl approximation.
 dosing,q_NaOH_max,100.0,m3/d,Q_NAOH_MAX,PyADM1_pH_2stage_PRBS.py,Pump saturation limit.
 dosing,q_HCl_max,100.0,m3/d,Q_HCL_MAX,PyADM1_pH_2stage_PRBS.py,Pump saturation limit.
-control,control_interval,3.0,h,CONTROL_INTERVAL_DAYS,PyADM1_pH_2stage_PRBS.py,PI output update interval.
+control,control_interval,1.0,h,CONTROL_INTERVAL_DAYS,PyADM1_pH_2stage_PRBS.py,PI output update interval.
 control,ode_log_interval,15.0,min,influent time grid,PyADM1_single_stage_reference.py,Log/ODE step grid from model inputs.
 prbs,low_setpoint,7.0,pH,PRBS_LOW_PH,PyADM1_pH_2stage_PRBS.py,Low PRBS target.
 prbs,high_setpoint,8.4,pH,PRBS_HIGH_PH,PyADM1_pH_2stage_PRBS.py,High PRBS target.

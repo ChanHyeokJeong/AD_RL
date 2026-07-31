@@ -22,15 +22,15 @@ GAS_TO_LIQUID_VOLUME_RATIO = 300.0 / 3400.0
 C_NAOH = 25.0  # kmol/m3
 C_HCL = 11.3  # kmol/m3, approx. 35 wt% HCl
 
-# Aggressive IMC PI tuning from 6 d / 24 d open-loop PRBS FOPTD fits.
-# Target: NaOH tuned for about +0.1 pH initial up-step overshoot, HCl about 1 d settling.
+# Fast 1 h PI tuning from 6 d / 24 d open-loop PRBS FOPTD fits and closed-loop PRBS checks.
+# Target: reactor-specific pH setpoint tracking inside about 1 d with limited overshoot.
 # Units: Kp in (m3/d)/pH, Ki in (m3/d)/(pH*d).
 CONTROL_TUNINGS = {
     "stage1_55C": {
-        "Kp_NaOH": 25.986622,
-        "Ki_NaOH": 4.331104,
-        "Kp_HCl": 37.858077,
-        "Ki_HCl": 6.309680,
+        "Kp_NaOH": 24.000000,
+        "Ki_NaOH": 4.800000,
+        "Kp_HCl": 28.000000,
+        "Ki_HCl": 5.600000,
     },
     "stage2_35C": {
         "Kp_NaOH": 34.039882,
@@ -39,7 +39,7 @@ CONTROL_TUNINGS = {
         "Ki_HCl": 7.694008,
     },
 }
-CONTROL_INTERVAL_DAYS = 3.0 / 24.0
+CONTROL_INTERVAL_DAYS = 1.0 / 24.0
 Q_NAOH_MIN = 0.0
 Q_NAOH_MAX = 100.0
 Q_HCL_MIN = 0.0

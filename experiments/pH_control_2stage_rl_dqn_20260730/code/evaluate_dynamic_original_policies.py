@@ -224,10 +224,13 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--run-name", default="dynamic_original_dqn_ppo_7d_8windows")
     parser.add_argument("--episode-days", type=float, default=7.0)
+    parser.add_argument("--decision-interval-h", type=float, default=1.0)
     parser.add_argument("--window-count", type=int, default=8)
     parser.add_argument("--start-days", default=None)
     parser.add_argument("--influent-csv", default="digester_influent_original_dynamic.csv")
     parser.add_argument("--use-dynamic-flow", action="store_true", default=True)
+    parser.add_argument("--temperature-parameter-csv", default="adm1_temperature_parameters_long.csv")
+    parser.add_argument("--use-temperature-kinetics", action="store_true")
     parser.add_argument(
         "--dqn-model",
         default=str(
@@ -259,8 +262,11 @@ def main() -> None:
     config = replace(
         PHControlRLConfig(),
         episode_days=float(args.episode_days),
+        decision_interval_h=float(args.decision_interval_h),
         influent_csv=str(args.influent_csv),
         use_dynamic_flow=bool(args.use_dynamic_flow),
+        temperature_parameter_csv=str(args.temperature_parameter_csv),
+        use_temperature_kinetics=bool(args.use_temperature_kinetics),
         chemical_kmol_weight=float(args.chemical_kmol_weight),
         ph_violation_weight=float(args.ph_violation_weight),
         reward_scale=float(args.reward_scale),
