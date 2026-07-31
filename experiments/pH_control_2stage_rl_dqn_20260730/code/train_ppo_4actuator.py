@@ -77,6 +77,10 @@ def summarize_episode(
         "chemical_m3",
         "chemical_kmol",
         "ph_violation_pH_d",
+        "stage1_active_biomass_ratio_d",
+        "stage2_active_biomass_ratio_d",
+        "stage1_active_biomass_relative_growth",
+        "stage2_active_biomass_relative_growth",
     ]:
         if col in ep_df.columns:
             summary[f"total_{col}"] = float(ep_df[col].sum())
@@ -328,10 +332,12 @@ def main() -> None:
     parser.add_argument("--initial-dose-prior-strength", type=float, default=0.0)
     parser.add_argument(
         "--reward-mode",
-        choices=["methane_total", "stage2_methane", "staged_vfa_ch4"],
+        choices=["methane_total", "stage2_methane", "staged_vfa_ch4", "active_biomass"],
         default="methane_total",
     )
     parser.add_argument("--methane-reward-weight", type=float, default=1.0)
+    parser.add_argument("--biomass-maintenance-weight", type=float, default=1000.0)
+    parser.add_argument("--biomass-growth-weight", type=float, default=5000.0)
     parser.add_argument("--reward-scale", type=float, default=100.0)
     parser.add_argument("--chemical-kmol-weight", type=float, default=0.2)
     parser.add_argument("--ph-violation-weight", type=float, default=500.0)
@@ -359,6 +365,8 @@ def main() -> None:
         learning_rate=float(args.learning_rate),
         reward_mode=str(args.reward_mode),
         methane_reward_weight=float(args.methane_reward_weight),
+        biomass_maintenance_weight=float(args.biomass_maintenance_weight),
+        biomass_growth_weight=float(args.biomass_growth_weight),
         reward_scale=float(args.reward_scale),
         chemical_kmol_weight=float(args.chemical_kmol_weight),
         ph_violation_weight=float(args.ph_violation_weight),

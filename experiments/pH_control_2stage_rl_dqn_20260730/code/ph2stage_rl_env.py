@@ -15,6 +15,7 @@ import PyADM1_pH_2stage_PRBS as base_model
 
 VFA_NAMES = ["S_va", "S_bu", "S_pro", "S_ac"]
 FERMENTABLE_NAMES = ["S_su", "S_aa", "S_fa", "X_ch", "X_pr", "X_li"]
+ACTIVE_BIOMASS_NAMES = ["X_su", "X_aa", "X_fa", "X_c4", "X_pro", "X_ac", "X_h2"]
 
 
 @dataclass
@@ -42,6 +43,11 @@ class PHControlRLConfig:
     stage2_methane_weight: float = 0.1
     reward_mode: str = "methane_total"
     methane_reward_weight: float = 1.0
+    # Biomass reward uses initial-concentration-normalized quantities. At the
+    # defaults, maintaining both stages for seven days contributes about 14000
+    # raw reward units, comparable to the previous methane benefit.
+    biomass_maintenance_weight: float = 1000.0
+    biomass_growth_weight: float = 5000.0
     chemical_kmol_weight: float = 0.2
     ph_violation_weight: float = 500.0
 
@@ -130,6 +136,8 @@ class TwoStagePHDirectDosingPlant:
         self.current_action = 0
         self.last_interval_totals: dict[str, float] = {}
         self.last_step_log: list[dict] = []
+        self.initial_stage1_active_biomass = 1.0
+        self.initial_stage2_active_biomass = 1.0
 
     def reset(self, seed: int | None = None) -> np.ndarray:
         base_model.load_influent_csv(self.config.influent_csv)
@@ -163,6 +171,12 @@ class TwoStagePHDirectDosingPlant:
         self.current_action = self.hold_action_index()
         self._apply_action_to_reactors(self.current_action)
         self._apply_dynamic_flow(self.current_index)
+        self.initial_stage1_active_biomass = concentration_total(
+            self.stage1, ACTIVE_BIOMASS_NAMES
+        )
+        self.initial_stage2_active_biomass = concentration_total(
+            self.stage2, ACTIVE_BIOMASS_NAMES
+        )
         self.last_interval_totals = self._empty_totals()
         self.last_step_log = []
         return self.observation()
@@ -227,6 +241,10 @@ class TwoStagePHDirectDosingPlant:
             "stage1_ph_violation_pH_d": 0.0,
             "stage2_ph_violation_pH_d": 0.0,
             "ph_violation_pH_d": 0.0,
+            "stage1_active_biomass_ratio_d": 0.0,
+            "stage2_active_biomass_ratio_d": 0.0,
+            "stage1_active_biomass_relative_growth": 0.0,
+            "stage2_active_biomass_relative_growth": 0.0,
         }
 
     def _set_stage_dosing(self, ctx: dict, q_naoh_m3_d: float, q_hcl_m3_d: float) -> None:
@@ -314,14 +332,18 @@ class TwoStagePHDirectDosingPlant:
             self._apply_dynamic_flow(feed_index)
             stage1_vfa_in = feed_total(self.stage1, VFA_NAMES)
             stage1_fermentable_in = feed_total(self.stage1, FERMENTABLE_NAMES)
+            stage1_biomass_start = concentration_total(self.stage1, ACTIVE_BIOMASS_NAMES)
 
             base_model.run_reactor_step(self.stage1, [self.current_time_d, next_time])
             stage1_vfa_out = vfa_total(self.stage1)
+            stage1_biomass_end = concentration_total(self.stage1, ACTIVE_BIOMASS_NAMES)
 
             base_model.set_input_from_reactor(self.stage2, self.stage1)
             stage2_vfa_in = stage1_vfa_out
+            stage2_biomass_start = concentration_total(self.stage2, ACTIVE_BIOMASS_NAMES)
             base_model.run_reactor_step(self.stage2, [self.current_time_d, next_time])
             stage2_vfa_out = vfa_total(self.stage2)
+            stage2_biomass_end = concentration_total(self.stage2, ACTIVE_BIOMASS_NAMES)
 
             q_ad = float(self.stage1["q_ad"])
             stage1_vfa_in_load = stage1_vfa_in * q_ad * dt
@@ -361,6 +383,21 @@ class TwoStagePHDirectDosingPlant:
                 self.config.stage2_pH_max,
             ) * dt
 
+            stage1_biomass_ref = max(1e-12, self.initial_stage1_active_biomass)
+            stage2_biomass_ref = max(1e-12, self.initial_stage2_active_biomass)
+            stage1_biomass_ratio_d = (
+                0.5 * (stage1_biomass_start + stage1_biomass_end) / stage1_biomass_ref * dt
+            )
+            stage2_biomass_ratio_d = (
+                0.5 * (stage2_biomass_start + stage2_biomass_end) / stage2_biomass_ref * dt
+            )
+            stage1_biomass_growth = (
+                stage1_biomass_end - stage1_biomass_start
+            ) / stage1_biomass_ref
+            stage2_biomass_growth = (
+                stage2_biomass_end - stage2_biomass_start
+            ) / stage2_biomass_ref
+
             increments = {
                 "stage1_vfa_in_kgCOD": stage1_vfa_in_load,
                 "stage1_vfa_out_kgCOD": stage1_vfa_out_load,
@@ -377,6 +414,10 @@ class TwoStagePHDirectDosingPlant:
                 "stage1_ph_violation_pH_d": stage1_ph_violation,
                 "stage2_ph_violation_pH_d": stage2_ph_violation,
                 "ph_violation_pH_d": stage1_ph_violation + stage2_ph_violation,
+                "stage1_active_biomass_ratio_d": stage1_biomass_ratio_d,
+                "stage2_active_biomass_ratio_d": stage2_biomass_ratio_d,
+                "stage1_active_biomass_relative_growth": stage1_biomass_growth,
+                "stage2_active_biomass_relative_growth": stage2_biomass_growth,
             }
             for key, value in increments.items():
                 totals[key] += float(value)
@@ -388,6 +429,8 @@ class TwoStagePHDirectDosingPlant:
                 "stage2_pH": stage2_pH,
                 "stage1_vfa_kgCOD_m3": stage1_vfa_out,
                 "stage2_vfa_kgCOD_m3": stage2_vfa_out,
+                "stage1_active_biomass_kgCOD_m3": stage1_biomass_end,
+                "stage2_active_biomass_kgCOD_m3": stage2_biomass_end,
                 "stage1_q_ch4_m3_d": float(self.stage1["q_ch4"]),
                 "stage2_q_ch4_m3_d": float(self.stage2["q_ch4"]),
                 "stage1_q_NaOH_m3_d": float(self.stage1["q_NaOH"]),
@@ -435,6 +478,12 @@ class TwoStagePHDirectDosingPlant:
                 "stage2_pH": float(self.stage2["pH"]),
                 "stage1_vfa_kgCOD_m3": vfa_total(self.stage1),
                 "stage2_vfa_kgCOD_m3": vfa_total(self.stage2),
+                "stage1_active_biomass_kgCOD_m3": concentration_total(
+                    self.stage1, ACTIVE_BIOMASS_NAMES
+                ),
+                "stage2_active_biomass_kgCOD_m3": concentration_total(
+                    self.stage2, ACTIVE_BIOMASS_NAMES
+                ),
                 "stage1_q_NaOH_m3_d": float(self.stage1["q_NaOH"]),
                 "stage1_q_HCl_m3_d": float(self.stage1["q_HCl"]),
                 "stage2_q_NaOH_m3_d": float(self.stage2["q_NaOH"]),
@@ -464,6 +513,19 @@ class TwoStagePHDirectDosingPlant:
             benefit = self.config.methane_reward_weight * totals["stage2_ch4_m3"]
         elif self.config.reward_mode == "methane_total":
             benefit = self.config.methane_reward_weight * totals["total_ch4_m3"]
+        elif self.config.reward_mode == "active_biomass":
+            biomass_ratio_d = (
+                totals["stage1_active_biomass_ratio_d"]
+                + totals["stage2_active_biomass_ratio_d"]
+            )
+            biomass_growth = (
+                totals["stage1_active_biomass_relative_growth"]
+                + totals["stage2_active_biomass_relative_growth"]
+            )
+            benefit = (
+                self.config.biomass_maintenance_weight * biomass_ratio_d
+                + self.config.biomass_growth_weight * biomass_growth
+            )
         else:
             raise ValueError(f"Unknown reward_mode: {self.config.reward_mode}")
         chemical_cost = self.config.chemical_kmol_weight * totals["chemical_kmol"]
@@ -485,6 +547,14 @@ class TwoStagePHDirectDosingPlant:
             / max(1e-12, self.episode_end_d - self.episode_start_d)
         )
         totals = self.last_interval_totals or self._empty_totals()
+        biomass_obs = []
+        if self.config.reward_mode == "active_biomass":
+            biomass_obs = [
+                concentration_total(self.stage1, ACTIVE_BIOMASS_NAMES)
+                / max(1e-12, self.initial_stage1_active_biomass),
+                concentration_total(self.stage2, ACTIVE_BIOMASS_NAMES)
+                / max(1e-12, self.initial_stage2_active_biomass),
+            ]
         obs = np.asarray(
             [
                 (float(self.stage1["pH"]) - 6.0) / 2.0,
@@ -493,6 +563,7 @@ class TwoStagePHDirectDosingPlant:
                 np.log1p(vfa_total(self.stage2)),
                 float(self.stage1["q_ch4"]) / 1000.0,
                 float(self.stage2["q_ch4"]) / 1000.0,
+                *biomass_obs,
                 float(self.stage1["q_NaOH"]) / max(1e-12, base_model.Q_NAOH_MAX),
                 float(self.stage1["q_HCl"]) / max(1e-12, base_model.Q_HCL_MAX),
                 float(self.stage2["q_NaOH"]) / max(1e-12, base_model.Q_NAOH_MAX),
@@ -507,13 +578,20 @@ class TwoStagePHDirectDosingPlant:
 
     @property
     def observation_names(self) -> list[str]:
-        return [
+        names = [
             "stage1_pH_scaled",
             "stage2_pH_scaled",
             "stage1_log1p_vfa",
             "stage2_log1p_vfa",
             "stage1_q_ch4_scaled",
             "stage2_q_ch4_scaled",
+        ]
+        if self.config.reward_mode == "active_biomass":
+            names.extend(
+                ["stage1_active_biomass_ratio", "stage2_active_biomass_ratio"]
+            )
+        names.extend(
+            [
             "stage1_q_NaOH_scaled",
             "stage1_q_HCl_scaled",
             "stage2_q_NaOH_scaled",
@@ -521,7 +599,9 @@ class TwoStagePHDirectDosingPlant:
             "last_stage1_acid_yield",
             "last_stage2_vfa_conversion",
             "episode_elapsed_fraction",
-        ]
+            ]
+        )
+        return names
 
 
 class TwoStagePHDirectDosingEnv(gym.Env):
@@ -642,6 +722,10 @@ def summarize_decisions(decision_df: pd.DataFrame) -> dict[str, float]:
         "chemical_m3",
         "chemical_kmol",
         "ph_violation_pH_d",
+        "stage1_active_biomass_ratio_d",
+        "stage2_active_biomass_ratio_d",
+        "stage1_active_biomass_relative_growth",
+        "stage2_active_biomass_relative_growth",
     ]
     out = {f"total_{col}": float(decision_df[col].sum()) for col in sum_cols if col in decision_df.columns}
     last = decision_df.iloc[-1]
@@ -656,6 +740,18 @@ def summarize_decisions(decision_df: pd.DataFrame) -> dict[str, float]:
             "mean_stage1_acid_yield": float(decision_df["stage1_acid_yield"].mean()),
             "mean_stage2_vfa_conversion": float(decision_df["stage2_vfa_conversion"].mean()),
             "mean_stage2_ch4_per_vfa_in": float(decision_df["stage2_ch4_per_vfa_in"].mean()),
+            "final_stage1_active_biomass_kgCOD_m3": float(
+                last["stage1_active_biomass_kgCOD_m3"]
+            ),
+            "final_stage2_active_biomass_kgCOD_m3": float(
+                last["stage2_active_biomass_kgCOD_m3"]
+            ),
+            "mean_stage1_active_biomass_kgCOD_m3": float(
+                decision_df["stage1_active_biomass_kgCOD_m3"].mean()
+            ),
+            "mean_stage2_active_biomass_kgCOD_m3": float(
+                decision_df["stage2_active_biomass_kgCOD_m3"].mean()
+            ),
         }
     )
     return out

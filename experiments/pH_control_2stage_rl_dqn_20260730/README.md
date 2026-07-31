@@ -1,5 +1,29 @@
 # 2-stage pH direct-dosing DQN/PPO experiment
 
+## Active-biomass reward mode
+
+Use `--reward-mode active_biomass` to reward maintenance and net growth of the
+active ADM1 microbial populations (`X_su`, `X_aa`, `X_fa`, `X_c4`, `X_pro`,
+`X_ac`, and `X_h2`) in both reactors. Particulate substrate and inert solids are
+excluded. The dense benefit is the time integral of biomass concentration
+relative to the episode's initial concentration plus a net-growth term.
+Chemical use and pH-range violations remain penalties.
+
+Methane production is not part of this reward. Stage 1 and stage 2 methane flow
+remain observation variables and are retained in rollout summaries for later
+comparison. Biomass mode adds two initial-normalized active-biomass observation
+variables; other reward modes retain the original 13-variable observation and
+remain compatible with existing checkpoints.
+
+Example smoke test:
+
+```powershell
+python .\experiments\pH_control_2stage_rl_dqn_20260730\code\train_dqn_4actuator.py `
+  --episodes 30 --episode-days 1.0 --decision-interval-h 1.0 `
+  --run-name biomass_reward_dqn_1d_30ep_test `
+  --reward-mode active_biomass --use-temperature-kinetics
+```
+
 Date: 2026-07-30
 
 This experiment starts the RL formulation for the 2-stage ADM1 pH-control problem:
