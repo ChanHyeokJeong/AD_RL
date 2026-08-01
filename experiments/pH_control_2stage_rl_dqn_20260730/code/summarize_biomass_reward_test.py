@@ -21,6 +21,12 @@ STAGES = [
     (500, "biomass_reward_dqn_1d_resume400_to500", 0),
     (600, "biomass_reward_dqn_1d_resume500_to600", 0),
 ]
+NO_PH_STAGES = [
+    (500, "biomass_reward_no_ph_penalty_ep500_eval"),
+    (700, "biomass_reward_no_ph_penalty_resume600_to700"),
+    (800, "biomass_reward_no_ph_penalty_resume700_to800"),
+    (900, "biomass_reward_no_ph_penalty_resume800_to900"),
+]
 
 
 def main() -> None:
@@ -152,6 +158,76 @@ def main() -> None:
     axes[1].legend()
     fig.tight_layout()
     fig.savefig(figures / "biomass_reward_dqn_1d_staged_progress.png", dpi=180)
+    plt.close(fig)
+
+    no_ph_base = ROOT / "runs" / "biomass_reward_no_ph_penalty_ep500_eval"
+    no_ph_comparison = pd.read_csv(no_ph_base / "comparison_summary.csv")
+    no_ph_rows = []
+    no_ph_training = []
+    for episodes_total, run_name in NO_PH_STAGES:
+        run_dir = ROOT / "runs" / run_name
+        summary = json.loads((run_dir / "dqn_policy_summary.json").read_text(encoding="utf-8"))
+        no_ph_rows.append(
+            {
+                "policy": f"DQN deterministic ep{episodes_total}",
+                "episodes": episodes_total,
+                **{column: summary.get(column) for column in columns if column != "policy"},
+            }
+        )
+        episode_path = run_dir / "episode_summary.csv"
+        if episode_path.exists():
+            episode_df = pd.read_csv(episode_path)
+            if not episode_df.empty:
+                no_ph_training.append(episode_df[["episode", "total_reward"]])
+    for row in no_ph_comparison[columns].to_dict("records"):
+        if row["policy"] != "dqn_deterministic":
+            no_ph_rows.append({"episodes": pd.NA, **row})
+    no_ph = pd.DataFrame(no_ph_rows)
+    no_ph.to_csv(results / "biomass_reward_no_ph_penalty_staged_comparison.csv", index=False)
+
+    fig, axes = plt.subplots(2, 1, figsize=(10, 8))
+    no_ph_dqn = no_ph[no_ph["episodes"].notna()].copy()
+    if no_ph_training:
+        training = pd.concat(no_ph_training, ignore_index=True).sort_values("episode")
+        axes[0].plot(training["episode"] + 1, training["total_reward"], alpha=0.2)
+        axes[0].plot(
+            training["episode"] + 1,
+            training["total_reward"].rolling(25, min_periods=1).mean(),
+            linewidth=2,
+            label="25-episode mean",
+        )
+    axes[0].scatter(
+        no_ph_dqn["episodes"], no_ph_dqn["total_reward"], color="black", label="Deterministic"
+    )
+    for policy, style in [
+        ("best_fixed_open_loop_action", "--"),
+        ("fixed_pH7_PI_both_stages", ":"),
+        ("zero_dosing_open_loop", "-."),
+    ]:
+        value = no_ph.loc[no_ph["policy"] == policy, "total_reward"].iloc[0]
+        axes[0].axhline(value, linestyle=style, label=policy)
+    axes[0].set(
+        xlabel="Cumulative episode",
+        ylabel="Reward",
+        title="Active-biomass DQN after removing pH violation cost",
+    )
+    axes[0].grid(alpha=0.25)
+    axes[0].legend(fontsize=8, ncol=2)
+
+    axes[1].plot(
+        no_ph_dqn["episodes"],
+        no_ph_dqn["total_ph_violation_pH_d"],
+        marker="o",
+        color="tab:red",
+    )
+    axes[1].set(
+        xlabel="Cumulative episode",
+        ylabel="Logged pH violation, pH*d",
+        title="pH violation remains diagnostic only (zero reward weight)",
+    )
+    axes[1].grid(alpha=0.25)
+    fig.tight_layout()
+    fig.savefig(figures / "biomass_reward_no_ph_penalty_staged_progress.png", dpi=180)
     plt.close(fig)
 
 

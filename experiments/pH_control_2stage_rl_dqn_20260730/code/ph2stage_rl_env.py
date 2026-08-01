@@ -48,6 +48,9 @@ class PHControlRLConfig:
     # raw reward units, comparable to the previous methane benefit.
     biomass_maintenance_weight: float = 1000.0
     biomass_growth_weight: float = 5000.0
+    # Biomass experiments log pH-range violations but do not score them by
+    # default. Other reward modes continue to use ph_violation_weight.
+    biomass_ph_violation_weight: float = 0.0
     chemical_kmol_weight: float = 0.2
     ph_violation_weight: float = 500.0
 
@@ -529,7 +532,12 @@ class TwoStagePHDirectDosingPlant:
         else:
             raise ValueError(f"Unknown reward_mode: {self.config.reward_mode}")
         chemical_cost = self.config.chemical_kmol_weight * totals["chemical_kmol"]
-        ph_cost = self.config.ph_violation_weight * totals["ph_violation_pH_d"]
+        ph_weight = (
+            self.config.biomass_ph_violation_weight
+            if self.config.reward_mode == "active_biomass"
+            else self.config.ph_violation_weight
+        )
+        ph_cost = ph_weight * totals["ph_violation_pH_d"]
         raw_reward = benefit - chemical_cost - ph_cost
         return {
             "reward_benefit": benefit,

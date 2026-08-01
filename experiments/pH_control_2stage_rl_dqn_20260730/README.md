@@ -7,7 +7,8 @@ active ADM1 microbial populations (`X_su`, `X_aa`, `X_fa`, `X_c4`, `X_pro`,
 `X_ac`, and `X_h2`) in both reactors. Particulate substrate and inert solids are
 excluded. The dense benefit is the time integral of biomass concentration
 relative to the episode's initial concentration plus a net-growth term.
-Chemical use and pH-range violations remain penalties.
+Chemical use remains a penalty. pH-range violations are logged as diagnostics
+but have zero reward weight by default in active-biomass mode.
 
 Methane production is not part of this reward. Stage 1 and stage 2 methane flow
 remain observation variables and are retained in rollout summaries for later
@@ -30,6 +31,13 @@ episodes. The best deterministic policy occurred at episode 500 (reward
 retained biomass slightly better but scored 16.1783, so the ep500 checkpoint is
 kept as the best policy and ep600 as the continuation head. See
 `results/biomass_reward_dqn_1d_staged_comparison.csv`.
+
+After removing the active-biomass pH violation cost, the previous ep500 policy
+rescored from 16.8848 to 18.6186. Fine-tuning through episode 900 produced the
+best deterministic policy at ep700 (18.7431), still below best fixed open-loop
+(19.1333) and zero dosing (19.1292). Logged pH violation increased because it
+no longer affects reward. See
+`results/biomass_reward_no_ph_penalty_staged_comparison.csv`.
 
 Date: 2026-07-30
 

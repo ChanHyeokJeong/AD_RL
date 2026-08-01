@@ -395,6 +395,7 @@ def main() -> None:
     parser.add_argument("--methane-reward-weight", type=float, default=1.0)
     parser.add_argument("--biomass-maintenance-weight", type=float, default=1000.0)
     parser.add_argument("--biomass-growth-weight", type=float, default=5000.0)
+    parser.add_argument("--biomass-ph-violation-weight", type=float, default=0.0)
     parser.add_argument("--reward-scale", type=float, default=100.0)
     parser.add_argument("--chemical-kmol-weight", type=float, default=0.2)
     parser.add_argument("--ph-violation-weight", type=float, default=500.0)
@@ -424,6 +425,7 @@ def main() -> None:
         methane_reward_weight=float(args.methane_reward_weight),
         biomass_maintenance_weight=float(args.biomass_maintenance_weight),
         biomass_growth_weight=float(args.biomass_growth_weight),
+        biomass_ph_violation_weight=float(args.biomass_ph_violation_weight),
         reward_scale=float(args.reward_scale),
         chemical_kmol_weight=float(args.chemical_kmol_weight),
         ph_violation_weight=float(args.ph_violation_weight),
